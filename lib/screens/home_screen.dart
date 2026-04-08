@@ -23,10 +23,16 @@ class HomeScreen extends ConsumerWidget {
             child: config == null
                 ? const Center(child: Text('Create or select a project config.'))
                 : Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
                     children:[
                       _buildHeader(context, ref, config),
-                      const Divider(height: 1, thickness: 1),
-                      const Expanded(child: ProjectTreeView()),
+                      Expanded(
+                        child: Material(
+                          color: Colors.transparent,
+                          clipBehavior: Clip.hardEdge,
+                          child: const ProjectTreeView(),
+                        ),
+                      ),
                     ],
                   ),
           ),
@@ -36,50 +42,57 @@ class HomeScreen extends ConsumerWidget {
   }
 
   Widget _buildHeader(BuildContext context, WidgetRef ref, config) {
-    return Padding(
-      padding: const EdgeInsets.all(16.0),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children:[
-              Text(config.name, style: Theme.of(context).textTheme.headlineSmall),
-              const Spacer(),
-              ElevatedButton.icon(
-                icon: const Icon(Icons.settings),
-                label: const Text('Ignores'),
-                onPressed: () {
-                  showDialog(
-                    context: context,
-                    builder: (_) => IgnoreListDialog(config: config),
-                  );
-                },
-              ),
-              const SizedBox(width: 16),
-              const GenerateButton(),
-            ],
-          ),
-          const SizedBox(height: 16),
-          Row(
-            children:[
-              Expanded(
-                child: Text(
-                  config.rootPath.isEmpty ? 'No root folder selected' : config.rootPath,
-                  style: Theme.of(context).textTheme.bodyMedium,
+    return Card(
+      margin: const EdgeInsets.fromLTRB(16.0, 16.0, 16.0, 8.0),
+      elevation: 2,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      child: Padding(
+        padding: const EdgeInsets.all(16.0),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children:[
+                Text(config.name, style: Theme.of(context).textTheme.headlineSmall),
+                const Spacer(),
+                ElevatedButton.icon(
+                  icon: const Icon(Icons.settings),
+                  label: const Text('Ignores'),
+                  onPressed: () {
+                    showDialog(
+                      context: context,
+                      builder: (_) => IgnoreListDialog(config: config),
+                    );
+                  },
                 ),
-              ),
-              ElevatedButton(
-                onPressed: () async {
-                  String? selectedDirectory = await FilePicker.getDirectoryPath();
-                  if (selectedDirectory != null) {
-                    ref.read(appStateControllerProvider).updateCurrentConfig(rootPath: selectedDirectory);
-                  }
-                },
-                child: const Text('Select Root Folder'),
-              ),
-            ],
-          ),
-        ],
+                const SizedBox(width: 16),
+                const GenerateButton(),
+              ],
+            ),
+            const SizedBox(height: 16),
+            Row(
+              children:[
+                Expanded(
+                  child: Text(
+                    config.rootPath.isEmpty ? 'No root folder selected' : config.rootPath,
+                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                      color: Theme.of(context).colorScheme.onSurfaceVariant,
+                    ),
+                  ),
+                ),
+                ElevatedButton(
+                  onPressed: () async {
+                    String? selectedDirectory = await FilePicker.getDirectoryPath();
+                    if (selectedDirectory != null) {
+                      ref.read(appStateControllerProvider).updateCurrentConfig(rootPath: selectedDirectory);
+                    }
+                  },
+                  child: const Text('Select Root Folder'),
+                ),
+              ],
+            ),
+          ],
+        ),
       ),
     );
   }

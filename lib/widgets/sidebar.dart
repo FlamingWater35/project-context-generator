@@ -1,12 +1,26 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../providers/app_state.dart';
+import 'smooth_scroll.dart';
 
-class Sidebar extends ConsumerWidget {
+class Sidebar extends ConsumerStatefulWidget {
   const Sidebar({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<Sidebar> createState() => _SidebarState();
+}
+
+class _SidebarState extends ConsumerState<Sidebar> {
+  final SmoothScrollController _scrollController = SmoothScrollController();
+
+  @override
+  void dispose() {
+    _scrollController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final configs = ref.watch(configsProvider);
     final selectedId = ref.watch(selectedConfigIdProvider) ?? (configs.isNotEmpty ? configs.first.id : null);
 
@@ -34,6 +48,7 @@ class Sidebar extends ConsumerWidget {
             ),
             Expanded(
               child: ListView.builder(
+                controller: _scrollController,
                 padding: const EdgeInsets.symmetric(vertical: 8),
                 itemCount: configs.length,
                 itemBuilder: (context, index) {
@@ -44,12 +59,12 @@ class Sidebar extends ConsumerWidget {
                     margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
                     decoration: BoxDecoration(
                       color: isSelected
-                          ? Theme.of(context).colorScheme.primaryContainer.withOpacity(0.4)
-                          : Colors.white.withOpacity(0.03),
+                          ? Theme.of(context).colorScheme.primaryContainer.withAlpha(102)
+                          : Colors.white.withAlpha(8),
                       borderRadius: BorderRadius.circular(8),
                       border: Border.all(
                         color: isSelected
-                            ? Theme.of(context).colorScheme.primary.withOpacity(0.5)
+                            ? Theme.of(context).colorScheme.primary.withAlpha(128)
                             : Colors.transparent,
                       ),
                     ),

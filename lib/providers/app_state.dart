@@ -60,7 +60,6 @@ final selectedConfigProvider = Provider<ProjectConfig?>((ref) {
   }
 });
 
-// A localized config wrapper to isolate tree rebuilding only to structural changes
 class _TreeConfig {
   final String rootPath;
   final List<String> ignorePatterns;

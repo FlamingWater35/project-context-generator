@@ -42,9 +42,9 @@ class FileNodeWidget extends ConsumerWidget {
           controller.toggleFile(node.relativePath, !isIncluded);
         }
       },
-      hoverColor: Colors.white.withOpacity(0.05),
-      splashColor: Colors.white.withOpacity(0.1),
-      highlightColor: Colors.white.withOpacity(0.05),
+      hoverColor: Colors.white.withAlpha(13),
+      splashColor: Colors.white.withAlpha(26),
+      highlightColor: Colors.white.withAlpha(13),
       child: Padding(
         padding: const EdgeInsets.symmetric(vertical: 4.0, horizontal: 4.0),
         child: Row(

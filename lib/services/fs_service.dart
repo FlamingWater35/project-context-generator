@@ -64,8 +64,6 @@ class FsService {
         // Handle permission denied securely
       }
 
-      // Prune empty directories. This ensures folders matching ignore patterns
-      // (or containing only ignored files) disappear completely, just like files.
       children.removeWhere((child) => child.isDirectory && child.children.isEmpty);
 
       children.sort((a, b) {

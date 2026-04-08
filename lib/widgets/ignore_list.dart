@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models/project_config.dart';
 import '../providers/app_state.dart';
+import 'smooth_scroll.dart';
 
 class IgnoreListDialog extends ConsumerStatefulWidget {
   final ProjectConfig config;
@@ -14,11 +15,19 @@ class IgnoreListDialog extends ConsumerStatefulWidget {
 class _IgnoreListDialogState extends ConsumerState<IgnoreListDialog> {
   late List<String> ignores;
   final TextEditingController _controller = TextEditingController();
+  final SmoothScrollController _scrollController = SmoothScrollController();
 
   @override
   void initState() {
     super.initState();
     ignores = List.from(widget.config.ignorePatterns);
+  }
+
+  @override
+  void dispose() {
+    _scrollController.dispose();
+    _controller.dispose();
+    super.dispose();
   }
 
   @override
@@ -50,6 +59,7 @@ class _IgnoreListDialogState extends ConsumerState<IgnoreListDialog> {
             const SizedBox(height: 16),
             Expanded(
               child: ListView.builder(
+                controller: _scrollController,
                 itemCount: ignores.length,
                 itemBuilder: (context, index) {
                   return ListTile(
