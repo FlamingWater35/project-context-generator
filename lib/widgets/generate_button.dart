@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:path/path.dart' as p;
 import '../providers/app_state.dart';
 import '../models/tree_node.dart';
+import 'snackbar.dart';
 
 class GenerateButton extends ConsumerWidget {
   const GenerateButton({super.key});
@@ -53,14 +54,11 @@ class GenerateButton extends ConsumerWidget {
         final fsService = ref.read(fsServiceProvider);
         final visibleFiles = _getVisibleFiles(treeNode);
 
-        // Prevent reading deeply ignored files that were included previously.
         final effectiveIncluded = config.includedFiles.toSet().intersection(visibleFiles);
 
         if (effectiveIncluded.isEmpty) {
           if (context.mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(content: Text('No files selected or all selected files are ignored.')),
-            );
+            showSnackBar(context, message: 'No files selected or all selected files are ignored.');
           }
           return;
         }
@@ -86,9 +84,7 @@ class GenerateButton extends ConsumerWidget {
         await Clipboard.setData(ClipboardData(text: buffer.toString()));
 
         if (context.mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Context copied to clipboard!')),
-          );
+          showSnackBar(context, message: 'Context copied to clipboard!');
         }
       },
     );

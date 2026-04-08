@@ -82,7 +82,7 @@ class HomeScreen extends ConsumerWidget {
                 ),
                 ElevatedButton(
                   onPressed: () async {
-                    String? selectedDirectory = await FilePicker.getDirectoryPath();
+                    String? selectedDirectory = await FilePicker.getDirectoryPath(dialogTitle: 'Select root folder');
                     if (selectedDirectory != null) {
                       ref.read(appStateControllerProvider).updateCurrentConfig(rootPath: selectedDirectory);
                     }
