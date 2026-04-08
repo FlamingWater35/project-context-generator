@@ -1,3 +1,3 @@
 # Project Context Generator
 
-A new Flutter project.
+A tool that scans a local project directory and generates a structured project context.
