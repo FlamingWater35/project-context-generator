@@ -1,0 +1,132 @@
+name: Build, Release, and Deploy
+
+on:
+  push:
+    branches: [main]
+
+env:
+  REPO_NAME: project-context-generator
+  APP_NAME: ProjectContextGenerator
+
+jobs:
+  build_windows:
+    runs-on: windows-latest
+    outputs:
+      app_version: ${{ steps.get_version.outputs.app_version }}
+    steps:
+      - uses: actions/checkout@v5
+      - uses: subosito/flutter-action@v2
+        with: { channel: "stable", cache: true }
+      - run: flutter clean
+      - run: flutter pub get
+      - run: dart run build_runner build --delete-conflicting-outputs && dart run slang
+      - run: flutter build windows --release
+      - name: Compress Portable Build
+        run: |
+          choco install 7zip
+          7z a Windows-portable.7z ./build/windows/x64/runner/Release/*
+        shell: bash
+      - name: Extract App Version
+        id: get_version
+        run: |
+          $fullVersion = (Get-Content pubspec.yaml | Select-String -Pattern "version:\s*([0-9A-Za-z\-+.]+)").Matches.Groups[1].Value.Trim()
+          $cleanVersion = $fullVersion.Split('+')[0]
+          echo "app_version=$cleanVersion" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
+          echo "Detected full version: $fullVersion"
+          echo "Using sanitized version for release: $cleanVersion"
+        shell: powershell
+      - name: Compile Inno Setup Installer
+        uses: Minionguyjpro/Inno-Setup-Action@v1.2.7
+        with:
+          path: scripts/installer_script.iss
+      - name: Upload Windows Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-build
+          path: |
+            Windows-portable.7z
+            scripts/output/*.exe
+
+  build_linux:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ninja-build libgtk-3-dev libfuse2
+      - uses: subosito/flutter-action@v2
+        with: { channel: "stable", cache: true }
+      - run: flutter clean
+      - run: flutter pub get
+      - run: dart run build_runner build --delete-conflicting-outputs && dart run slang
+      - run: flutter build linux --release
+      - name: Create Portable Tarball
+        run: |
+          tar -czvf ${{ env.APP_NAME }}-linux.tar.gz -C build/linux/x64/release/bundle .
+      - name: Install AppImageTool
+        run: |
+          wget https://github.com/AppImage/AppImageKit/releases/download/continuous/appimagetool-x86_64.AppImage
+          chmod +x appimagetool-x86_64.AppImage
+      - name: Create AppImage
+        run: |
+          mkdir -p AppDir/usr/bin
+          cp -r build/linux/x64/release/bundle/* AppDir/usr/bin/
+
+          EXECUTABLE_NAME=$(find build/linux/x64/release/bundle -maxdepth 1 -type f -executable -exec basename {} \; | grep -v '\.so$')
+          echo "Found executable file: ${EXECUTABLE_NAME}"
+
+          cat <<EOF > AppDir/AppRun
+          #!/bin/bash
+          HERE="\$(dirname "\$(readlink -f "\${0}")")"
+          cd "\${HERE}/usr/bin"
+          exec "./${EXECUTABLE_NAME}" "\$@"
+          EOF
+
+          chmod +x AppDir/AppRun
+          echo "[Desktop Entry]
+          Name=${{ env.APP_NAME }}
+          Exec=AppRun
+          Type=Application
+          Terminal=false
+          Icon=${EXECUTABLE_NAME}
+          Categories=Utility;" > AppDir/${EXECUTABLE_NAME}.desktop
+
+          cp assets/icon_transparent.png AppDir/${EXECUTABLE_NAME}.png
+          ./appimagetool-x86_64.AppImage AppDir ${{ env.APP_NAME }}-linux.AppImage
+      - name: Upload Linux Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: linux-build
+          path: |
+            ${{ env.APP_NAME }}-linux.tar.gz
+            ${{ env.APP_NAME }}-linux.AppImage
+
+  create_release:
+    runs-on: ubuntu-latest
+    needs: [build_windows, build_linux]
+    permissions:
+      contents: write
+    steps:
+      - name: Download all build artifacts
+        uses: actions/download-artifact@v5
+        with:
+          path: artifacts
+      - name: Display structure of downloaded files
+        run: ls -R artifacts
+      - name: Create Draft Release
+        uses: ncipollo/release-action@v1
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          artifacts: |
+            artifacts/**/*.7z
+            artifacts/**/*.exe
+            artifacts/**/*.tar.gz
+            artifacts/**/*.AppImage
+          draft: true
+          allowUpdates: true
+          tag: "dev-build-${{ github.run_number }}"
+          name: "Version ${{ needs.build_windows.outputs.app_version }}"
+          body: |
+            Automated development build.
+            Triggered by commit: `${{ github.sha }}`
