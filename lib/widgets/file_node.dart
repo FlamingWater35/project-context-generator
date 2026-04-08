@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:path/path.dart' as p;
 import '../models/tree_node.dart';
 import '../providers/app_state.dart';
 
@@ -23,6 +24,17 @@ class FileNodeWidget extends ConsumerWidget {
     return false;
   }
 
+  String _getCompoundExtension(String filename) {
+    if (filename.startsWith('.')) {
+      return p.extension(filename);
+    }
+    final parts = filename.split('.');
+    if (parts.length > 2) {
+      return '.${parts[parts.length - 2]}.${parts.last}';
+    }
+    return p.extension(filename);
+  }
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final config = ref.watch(selectedConfigProvider);
@@ -32,6 +44,20 @@ class FileNodeWidget extends ConsumerWidget {
     final hasIncluded = node.isDirectory ? _hasIncludedChildren(node, config.includedFiles) : isIncluded;
 
     final controller = ref.read(appStateControllerProvider);
+
+    String ignoreTooltip = 'Ignore file';
+    String ignorePattern = node.relativePath;
+
+    if (node.isDirectory) {
+      ignoreTooltip = 'Ignore folder';
+      ignorePattern = '${node.relativePath}/**';
+    } else {
+      final ext = _getCompoundExtension(node.name);
+      if (ext.isNotEmpty) {
+        ignoreTooltip = 'Ignore all $ext files';
+        ignorePattern = '**/*$ext';
+      }
+    }
 
     return InkWell(
       borderRadius: BorderRadius.circular(4),
@@ -114,7 +140,16 @@ class FileNodeWidget extends ConsumerWidget {
                 padding: const EdgeInsets.symmetric(horizontal: 4),
                 constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
               ),
-            ]
+            ],
+
+            IconButton(
+              icon: Icon(Icons.visibility_off, size: 18, color: Colors.grey.shade500),
+              tooltip: ignoreTooltip,
+              onPressed: () => controller.addIgnorePattern(ignorePattern),
+              splashRadius: 16,
+              padding: const EdgeInsets.symmetric(horizontal: 4),
+              constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+            ),
           ],
         ),
       ),

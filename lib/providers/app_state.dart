@@ -170,6 +170,15 @@ class AppStateController {
     updateCurrentConfig(includedFiles: set.toList());
   }
 
+  void addIgnorePattern(String pattern) {
+    final current = _ref.read(selectedConfigProvider);
+    if (current == null) return;
+    if (current.ignorePatterns.contains(pattern)) return;
+
+    final set = current.ignorePatterns.toSet()..add(pattern);
+    updateCurrentConfig(ignorePatterns: set.toList());
+  }
+
   void toggleNodeExpanded(TreeNode node) {
     node.isExpanded = !node.isExpanded;
     _ref.read(treeUpdateSignalProvider.notifier).state++;
