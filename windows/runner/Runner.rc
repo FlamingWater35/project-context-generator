@@ -93,9 +93,9 @@ BEGIN
             VALUE "FileDescription", "project_context_generator" "\0"
             VALUE "FileVersion", VERSION_AS_STRING "\0"
             VALUE "InternalName", "project_context_generator" "\0"
-            VALUE "LegalCopyright", "Copyright (C) 2026 com.example. All rights reserved." "\0"
+            VALUE "LegalCopyright", "Copyright (C) 2026 FlamingWater. All rights reserved." "\0"
             VALUE "OriginalFilename", "project_context_generator.exe" "\0"
-            VALUE "ProductName", "project_context_generator" "\0"
+            VALUE "ProductName", "Project Context Generator" "\0"
             VALUE "ProductVersion", VERSION_AS_STRING "\0"
         END
     END
