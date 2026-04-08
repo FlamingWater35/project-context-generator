@@ -1,0 +1,86 @@
+import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:file_picker/file_picker.dart';
+import '../providers/app_state.dart';
+import '../widgets/sidebar.dart';
+import '../widgets/tree_view.dart';
+import '../widgets/ignore_list.dart';
+import '../widgets/generate_button.dart';
+
+class HomeScreen extends ConsumerWidget {
+  const HomeScreen({super.key});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final config = ref.watch(selectedConfigProvider);
+
+    return Scaffold(
+      body: Row(
+        children:[
+          const Sidebar(),
+          const VerticalDivider(width: 1, thickness: 1),
+          Expanded(
+            child: config == null
+                ? const Center(child: Text('Create or select a project config.'))
+                : Column(
+                    children:[
+                      _buildHeader(context, ref, config),
+                      const Divider(height: 1, thickness: 1),
+                      const Expanded(child: ProjectTreeView()),
+                    ],
+                  ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildHeader(BuildContext context, WidgetRef ref, config) {
+    return Padding(
+      padding: const EdgeInsets.all(16.0),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children:[
+              Text(config.name, style: Theme.of(context).textTheme.headlineSmall),
+              const Spacer(),
+              ElevatedButton.icon(
+                icon: const Icon(Icons.settings),
+                label: const Text('Ignores'),
+                onPressed: () {
+                  showDialog(
+                    context: context,
+                    builder: (_) => IgnoreListDialog(config: config),
+                  );
+                },
+              ),
+              const SizedBox(width: 16),
+              const GenerateButton(),
+            ],
+          ),
+          const SizedBox(height: 16),
+          Row(
+            children:[
+              Expanded(
+                child: Text(
+                  config.rootPath.isEmpty ? 'No root folder selected' : config.rootPath,
+                  style: Theme.of(context).textTheme.bodyMedium,
+                ),
+              ),
+              ElevatedButton(
+                onPressed: () async {
+                  String? selectedDirectory = await FilePicker.getDirectoryPath();
+                  if (selectedDirectory != null) {
+                    ref.read(appStateControllerProvider).updateCurrentConfig(rootPath: selectedDirectory);
+                  }
+                },
+                child: const Text('Select Root Folder'),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
