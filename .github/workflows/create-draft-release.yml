@@ -86,7 +86,7 @@ jobs:
           Icon=${EXECUTABLE_NAME}
           Categories=Utility;" > AppDir/${EXECUTABLE_NAME}.desktop
 
-          cp assets/icon_transparent.png AppDir/${EXECUTABLE_NAME}.png
+          cp assets/icon.png AppDir/${EXECUTABLE_NAME}.png
           ./appimagetool-x86_64.AppImage AppDir ${{ env.APP_NAME }}-linux.AppImage
       - name: Upload Linux Artifacts
         uses: actions/upload-artifact@v4
