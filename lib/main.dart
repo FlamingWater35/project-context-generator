@@ -7,9 +7,11 @@ void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
   await windowManager.ensureInitialized();
+
   WindowOptions windowOptions = const WindowOptions(
     title: 'Project Context Generator',
     size: Size(1000, 700),
+    minimumSize: Size(700, 500),
     center: true,
   );
 

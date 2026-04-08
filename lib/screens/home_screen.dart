@@ -16,7 +16,7 @@ class HomeScreen extends ConsumerWidget {
 
     return Scaffold(
       body: Row(
-        children:[
+        children: [
           const Sidebar(),
           const VerticalDivider(width: 1, thickness: 1),
           Expanded(
@@ -24,7 +24,7 @@ class HomeScreen extends ConsumerWidget {
                 ? const Center(child: Text('Create or select a project config.'))
                 : Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children:[
+                    children: [
                       _buildHeader(context, ref, config),
                       Expanded(
                         child: Material(
@@ -52,9 +52,16 @@ class HomeScreen extends ConsumerWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Row(
-              children:[
-                Text(config.name, style: Theme.of(context).textTheme.headlineSmall),
-                const Spacer(),
+              children: [
+                Expanded(
+                  child: Text(
+                    config.name,
+                    style: Theme.of(context).textTheme.headlineSmall,
+                    overflow: TextOverflow.ellipsis,
+                    maxLines: 1,
+                  ),
+                ),
+                const SizedBox(width: 16),
                 ElevatedButton.icon(
                   icon: const Icon(Icons.settings),
                   label: const Text('Ignores'),
@@ -65,21 +72,24 @@ class HomeScreen extends ConsumerWidget {
                     );
                   },
                 ),
-                const SizedBox(width: 16),
+                const SizedBox(width: 12),
                 const GenerateButton(),
               ],
             ),
             const SizedBox(height: 16),
             Row(
-              children:[
+              children: [
                 Expanded(
                   child: Text(
                     config.rootPath.isEmpty ? 'No root folder selected' : config.rootPath,
                     style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                      color: Theme.of(context).colorScheme.onSurfaceVariant,
-                    ),
+                          color: Theme.of(context).colorScheme.onSurfaceVariant,
+                        ),
+                    overflow: TextOverflow.ellipsis,
+                    maxLines: 1,
                   ),
                 ),
+                const SizedBox(width: 16),
                 ElevatedButton(
                   onPressed: () async {
                     String? selectedDirectory = await FilePicker.getDirectoryPath(dialogTitle: 'Select root folder');
