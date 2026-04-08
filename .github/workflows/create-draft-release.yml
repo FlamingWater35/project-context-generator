@@ -24,7 +24,7 @@ jobs:
       - name: Compress Portable Build
         run: |
           choco install 7zip
-          7z a Windows-portable.7z ./build/windows/x64/runner/Release/*
+          7z a "${{ env.APP_NAME }}-Windows-portable.7z" ./build/windows/x64/runner/Release/*
         shell: bash
       - name: Extract App Version
         id: get_version
@@ -44,7 +44,7 @@ jobs:
         with:
           name: windows-build
           path: |
-            Windows-portable.7z
+            ${{ env.APP_NAME }}-Windows-portable.7z
             scripts/output/*.exe
 
   build_linux:
