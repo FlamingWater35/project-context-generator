@@ -6,41 +6,47 @@ import 'package:path/path.dart' as p;
 import '../models/tree_node.dart';
 
 class _IgnoreRule {
-  _IgnoreRule(String pattern)
-    : exact = Glob(pattern),
-      anywhere = _createAnywhereGlob(pattern),
-      rootFallback = pattern.startsWith('**/')
-          ? Glob(pattern.substring(3))
-          : null;
+  factory _IgnoreRule(String pattern) {
+    String p = pattern.trim();
 
-  final Glob? anywhere;
-  final Glob exact;
-  final Glob? rootFallback;
+    if (p.isEmpty || p.startsWith('#')) {
+      return _IgnoreRule._(null, null);
+    }
 
-  bool matches(String path, String pathWithSlash) {
-    if (exact.matches(path) || exact.matches(pathWithSlash)) return true;
-    if (anywhere != null &&
-        (anywhere!.matches(path) || anywhere!.matches(pathWithSlash))) {
-      return true;
+    bool onlyDirs = false;
+    if (p.endsWith('/')) {
+      onlyDirs = true;
+      p = p.substring(0, p.length - 1);
     }
-    if (rootFallback != null &&
-        (rootFallback!.matches(path) || rootFallback!.matches(pathWithSlash))) {
-      return true;
+
+    bool isRootAnchored = false;
+    if (p.startsWith('/')) {
+      isRootAnchored = true;
+      p = p.substring(1);
     }
-    return false;
+
+    bool hasInternalSlash = p.contains('/') && !p.startsWith('**/');
+
+    if (!isRootAnchored && !hasInternalSlash) {
+      p = '**/$p';
+    }
+
+    if (onlyDirs) {
+      return _IgnoreRule._(null, Glob('$p/**'));
+    } else {
+      return _IgnoreRule._(Glob(p), Glob('$p/**'));
+    }
   }
 
-  static Glob? _createAnywhereGlob(String pattern) {
-    if (pattern.startsWith('**/') || pattern.startsWith('/')) return null;
+  _IgnoreRule._(this.glob, this.dirGlob);
 
-    final isFolderPattern = pattern.endsWith('/**');
-    final strippedFolder = isFolderPattern
-        ? pattern.substring(0, pattern.length - 3)
-        : pattern;
+  final Glob? dirGlob;
+  final Glob? glob;
 
-    if (strippedFolder.contains('/')) return null;
-
-    return Glob('**/$pattern');
+  bool matches(String path, String pathWithSlash) {
+    if (glob != null && glob!.matches(path)) return true;
+    if (dirGlob != null && dirGlob!.matches(pathWithSlash)) return true;
+    return false;
   }
 }
 
@@ -82,6 +88,7 @@ class FsService {
           final relPath = p
               .relative(entity.path, from: rootPath)
               .replaceAll('\\', '/');
+
           if (!_isIgnored(relPath, entity is Directory, rules)) {
             final childNode = buildNode(entity, relPath);
             children.add(childNode);
@@ -91,9 +98,7 @@ class FsService {
             }
           }
         }
-      } catch (e) {
-        // Handle permission denied securely
-      }
+      } catch (e) {}
 
       children.removeWhere(
         (child) => child.isDirectory && child.children.isEmpty,

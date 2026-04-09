@@ -72,6 +72,7 @@ class GenerateButton extends ConsumerWidget {
             showSnackBar(
               context,
               message: 'No files selected or all selected files are ignored.',
+              isError: true,
             );
           }
           return;
@@ -98,7 +99,11 @@ class GenerateButton extends ConsumerWidget {
         await Clipboard.setData(ClipboardData(text: buffer.toString()));
 
         if (context.mounted) {
-          showSnackBar(context, message: 'Context copied to clipboard!');
+          showSnackBar(
+            context,
+            message: 'Context copied to clipboard!',
+            isError: false,
+          );
         }
       },
     );
