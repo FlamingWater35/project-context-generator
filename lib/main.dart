@@ -2,11 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:window_manager/window_manager.dart';
 
+import 'providers/app_state.dart';
 import 'screens/home_screen.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-
   await windowManager.ensureInitialized();
 
   WindowOptions windowOptions = const WindowOptions(
@@ -24,11 +24,17 @@ void main() async {
   runApp(const ProviderScope(child: ProjectContextGeneratorApp()));
 }
 
-class ProjectContextGeneratorApp extends StatelessWidget {
+class ProjectContextGeneratorApp extends ConsumerWidget {
   const ProjectContextGeneratorApp({super.key});
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    ref.listen(selectedConfigIdProvider, (prev, next) {
+      if (next != null) {
+        ref.read(appStateControllerProvider).selectConfig(next);
+      }
+    });
+
     return MaterialApp(
       title: 'Project Context Generator',
       theme: ThemeData.dark(useMaterial3: true),

@@ -1,5 +1,6 @@
 import 'dart:io';
 
+import 'package:flutter/foundation.dart';
 import 'package:glob/glob.dart';
 import 'package:path/path.dart' as p;
 
@@ -8,10 +9,7 @@ import '../models/tree_node.dart';
 class _IgnoreRule {
   factory _IgnoreRule(String pattern) {
     String p = pattern.trim();
-
-    if (p.isEmpty || p.startsWith('#')) {
-      return _IgnoreRule._(null, null);
-    }
+    if (p.isEmpty || p.startsWith('#')) return _IgnoreRule._(null, null);
 
     bool onlyDirs = false;
     if (p.endsWith('/')) {
@@ -26,10 +24,7 @@ class _IgnoreRule {
     }
 
     bool hasInternalSlash = p.contains('/') && !p.startsWith('**/');
-
-    if (!isRootAnchored && !hasInternalSlash) {
-      p = '**/$p';
-    }
+    if (!isRootAnchored && !hasInternalSlash) p = '**/$p';
 
     if (onlyDirs) {
       return _IgnoreRule._(null, Glob('$p/**'));
@@ -51,10 +46,45 @@ class _IgnoreRule {
 }
 
 class FsService {
-  Future<TreeNode?> buildTree(
+  Future<Set<String>> scanPaths(
     String rootPath,
     List<String> ignorePatterns,
   ) async {
+    final rules = ignorePatterns
+        .map((pattern) => _IgnoreRule(pattern))
+        .toList();
+    final Set<String> paths = {};
+    final dir = Directory(rootPath);
+    if (!await dir.exists()) return paths;
+
+    try {
+      final stream = dir.list(recursive: true, followLinks: false);
+
+      await for (final entity in stream.handleError((error) {
+        debugPrint('FsService: Skipping inaccessible path during scan: $error');
+      })) {
+        try {
+          final relPath = p
+              .relative(entity.path, from: rootPath)
+              .replaceAll('\\', '/');
+          if (!_isIgnored(relPath, entity is Directory, rules)) {
+            paths.add(relPath);
+          }
+        } catch (e) {
+          continue;
+        }
+      }
+    } catch (e) {
+      debugPrint('FsService: Fatal directory listing error: $e');
+    }
+    return paths;
+  }
+
+  Future<TreeNode?> buildTree(
+    String rootPath,
+    List<String> ignorePatterns, {
+    Set<String>? knownPaths,
+  }) async {
     final rootDir = Directory(rootPath);
     if (!await rootDir.exists()) return null;
 
@@ -64,46 +94,58 @@ class FsService {
 
     TreeNode buildNode(FileSystemEntity entity, String relativePath) {
       final isDir = entity is Directory;
-      final name = p.basename(entity.path);
+      final bool isNew =
+          knownPaths != null && !knownPaths.contains(relativePath);
+
       return TreeNode(
         path: entity.path,
         relativePath: relativePath,
-        name: name,
+        name: p.basename(entity.path),
         isDirectory: isDir,
         isExpanded: relativePath.isEmpty,
+        isNew: isNew,
       );
     }
 
     final rootNode = buildNode(rootDir, '');
 
-    Future<void> populateChildren(TreeNode node) async {
-      if (!node.isDirectory) return;
+    Future<bool> populateChildren(TreeNode node) async {
+      if (!node.isDirectory) return node.isNew;
 
       final dir = Directory(node.path);
       List<TreeNode> children = [];
+      bool anyChildIsNew = false;
 
       try {
-        final entities = await dir.list().toList();
+        final entities = await dir.list().toList().catchError((e) {
+          debugPrint('FsService: Cannot list directory ${node.path}: $e');
+          return <FileSystemEntity>[];
+        });
+
         for (final entity in entities) {
-          final relPath = p
-              .relative(entity.path, from: rootPath)
-              .replaceAll('\\', '/');
-
-          if (!_isIgnored(relPath, entity is Directory, rules)) {
-            final childNode = buildNode(entity, relPath);
-            children.add(childNode);
-
-            if (childNode.isDirectory) {
-              await populateChildren(childNode);
+          try {
+            final relPath = p
+                .relative(entity.path, from: rootPath)
+                .replaceAll('\\', '/');
+            if (!_isIgnored(relPath, entity is Directory, rules)) {
+              final childNode = buildNode(entity, relPath);
+              children.add(childNode);
+              if (childNode.isDirectory) {
+                final childHasNew = await populateChildren(childNode);
+                if (childHasNew) anyChildIsNew = true;
+              } else {
+                if (childNode.isNew) anyChildIsNew = true;
+              }
             }
+          } catch (e) {
+            continue;
           }
         }
-      } catch (e) {}
+      } catch (_) {}
 
       children.removeWhere(
         (child) => child.isDirectory && child.children.isEmpty,
       );
-
       children.sort((a, b) {
         if (a.isDirectory && !b.isDirectory) return -1;
         if (!a.isDirectory && b.isDirectory) return 1;
@@ -111,6 +153,8 @@ class FsService {
       });
 
       node.children = children;
+      if (anyChildIsNew) node.isNew = true;
+      return node.isNew;
     }
 
     await populateChildren(rootNode);
@@ -146,11 +190,8 @@ class FsService {
   bool _isIgnored(String relativePath, bool isDir, List<_IgnoreRule> rules) {
     String normalizedPath = relativePath.replaceAll('\\', '/');
     String pathWithSlash = isDir ? '$normalizedPath/' : normalizedPath;
-
     for (final rule in rules) {
-      if (rule.matches(normalizedPath, pathWithSlash)) {
-        return true;
-      }
+      if (rule.matches(normalizedPath, pathWithSlash)) return true;
     }
     return false;
   }

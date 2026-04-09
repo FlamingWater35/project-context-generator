@@ -12,9 +12,7 @@ class FileNodeWidget extends ConsumerWidget {
   final TreeNode node;
 
   bool _hasIncludedChildren(TreeNode node, List<String> includedFiles) {
-    if (!node.isDirectory) {
-      return includedFiles.contains(node.relativePath);
-    }
+    if (!node.isDirectory) return includedFiles.contains(node.relativePath);
     for (final child in node.children) {
       if (_hasIncludedChildren(child, includedFiles)) return true;
     }
@@ -31,35 +29,19 @@ class FileNodeWidget extends ConsumerWidget {
     final hasIncluded = node.isDirectory
         ? _hasIncludedChildren(node, config.includedFiles)
         : isIncluded;
-
     final controller = ref.read(appStateControllerProvider);
 
-    String ignoreTooltip = 'Ignore file';
-    String ignorePattern = node.relativePath;
-
-    if (node.isDirectory) {
-      ignoreTooltip = 'Ignore folder';
-      ignorePattern = '${node.relativePath}/**';
-    } else {
-      final ext = p.extension(node.name);
-      if (ext.isNotEmpty) {
-        ignoreTooltip = 'Ignore all $ext files';
-        ignorePattern = '*$ext';
-      } else {
-        ignoreTooltip = 'Ignore this file';
-        ignorePattern = node.relativePath;
-      }
-    }
+    String ignorePattern = node.isDirectory
+        ? '${node.relativePath}/**'
+        : (p.extension(node.name).isNotEmpty
+              ? '*${p.extension(node.name)}'
+              : node.relativePath);
 
     return InkWell(
       borderRadius: BorderRadius.circular(4),
-      onTap: () {
-        if (node.isDirectory) {
-          controller.toggleNodeExpanded(node);
-        } else {
-          controller.toggleFile(node.relativePath, !isIncluded);
-        }
-      },
+      onTap: () => node.isDirectory
+          ? controller.toggleNodeExpanded(node)
+          : controller.toggleFile(node.relativePath, !isIncluded),
       hoverColor: Colors.white.withAlpha(13),
       splashColor: Colors.white.withAlpha(26),
       highlightColor: Colors.white.withAlpha(13),
@@ -88,9 +70,8 @@ class FileNodeWidget extends ConsumerWidget {
               Checkbox(
                 visualDensity: VisualDensity.compact,
                 value: isIncluded,
-                onChanged: (val) {
-                  controller.toggleFile(node.relativePath, val ?? false);
-                },
+                onChanged: (val) =>
+                    controller.toggleFile(node.relativePath, val ?? false),
               ),
 
             Icon(
@@ -102,15 +83,42 @@ class FileNodeWidget extends ConsumerWidget {
             ),
             const SizedBox(width: 8),
             Expanded(
-              child: Text(
-                node.name,
-                style: TextStyle(
-                  color: hasIncluded || isIncluded
-                      ? Colors.white
-                      : Colors.grey.shade500,
-                  fontWeight: isIncluded ? FontWeight.bold : null,
-                ),
-                overflow: TextOverflow.ellipsis,
+              child: Row(
+                children: [
+                  Flexible(
+                    child: Text(
+                      node.name,
+                      style: TextStyle(
+                        color: hasIncluded || isIncluded
+                            ? Colors.white
+                            : Colors.grey.shade500,
+                        fontWeight: isIncluded ? FontWeight.bold : null,
+                      ),
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                  if (node.isNew) ...[
+                    const SizedBox(width: 8),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 4,
+                        vertical: 1,
+                      ),
+                      decoration: BoxDecoration(
+                        color: Colors.amber.shade800,
+                        borderRadius: BorderRadius.circular(4),
+                      ),
+                      child: const Text(
+                        'NEW',
+                        style: TextStyle(
+                          fontSize: 9,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.white,
+                        ),
+                      ),
+                    ),
+                  ],
+                ],
               ),
             ),
 
@@ -123,9 +131,6 @@ class FileNodeWidget extends ConsumerWidget {
                 ),
                 tooltip: 'Select all',
                 onPressed: () => controller.selectAll(node),
-                splashRadius: 16,
-                padding: const EdgeInsets.symmetric(horizontal: 4),
-                constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
               ),
               IconButton(
                 icon: Icon(
@@ -135,9 +140,6 @@ class FileNodeWidget extends ConsumerWidget {
                 ),
                 tooltip: 'Select none',
                 onPressed: () => controller.selectNone(node),
-                splashRadius: 16,
-                padding: const EdgeInsets.symmetric(horizontal: 4),
-                constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
               ),
               IconButton(
                 icon: Icon(
@@ -147,23 +149,16 @@ class FileNodeWidget extends ConsumerWidget {
                 ),
                 tooltip: 'Invert selection',
                 onPressed: () => controller.invertSelection(node),
-                splashRadius: 16,
-                padding: const EdgeInsets.symmetric(horizontal: 4),
-                constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
               ),
             ],
-
             IconButton(
               icon: Icon(
                 Icons.visibility_off,
                 size: 18,
                 color: Colors.grey.shade500,
               ),
-              tooltip: ignoreTooltip,
+              tooltip: 'Ignore',
               onPressed: () => controller.addIgnorePattern(ignorePattern),
-              splashRadius: 16,
-              padding: const EdgeInsets.symmetric(horizontal: 4),
-              constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
             ),
           ],
         ),

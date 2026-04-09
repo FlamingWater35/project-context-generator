@@ -11,6 +11,10 @@ import '../services/fs_service.dart';
 final configServiceProvider = Provider((ref) => ConfigService());
 final fsServiceProvider = Provider((ref) => FsService());
 
+final projectSnapshotsProvider = StateProvider<Map<String, Set<String>>>(
+  (ref) => {},
+);
+
 final configsProvider =
     StateNotifierProvider<ConfigsNotifier, List<ProjectConfig>>((ref) {
       return ConfigsNotifier(ref.watch(configServiceProvider));
@@ -52,9 +56,7 @@ final selectedConfigIdProvider = StateProvider<String?>((ref) => null);
 final selectedConfigProvider = Provider<ProjectConfig?>((ref) {
   final configs = ref.watch(configsProvider);
   final selectedId = ref.watch(selectedConfigIdProvider);
-  if (selectedId == null) {
-    return configs.isNotEmpty ? configs.first : null;
-  }
+  if (selectedId == null) return configs.isNotEmpty ? configs.first : null;
   try {
     return configs.firstWhere((c) => c.id == selectedId);
   } catch (_) {
@@ -89,15 +91,20 @@ final fileTreeProvider = FutureProvider<TreeNode?>((ref) async {
   final treeConfig = ref.watch(treeConfigProvider);
   if (treeConfig == null) return null;
 
+  final snapshots = ref.watch(projectSnapshotsProvider);
+  final config = ref.read(selectedConfigProvider);
+
+  final knownPaths = config != null ? snapshots[config.id] : null;
+
   final fsService = ref.watch(fsServiceProvider);
   return await fsService.buildTree(
     treeConfig.rootPath,
     treeConfig.ignorePatterns,
+    knownPaths: knownPaths,
   );
 });
 
 final treeUpdateSignalProvider = StateProvider<int>((ref) => 0);
-
 final appStateControllerProvider = Provider((ref) => AppStateController(ref));
 
 class AppStateController {
@@ -107,6 +114,21 @@ class AppStateController {
 
   void selectConfig(String? id) {
     _ref.read(selectedConfigIdProvider.notifier).state = id;
+    _initializeSnapshot(id);
+  }
+
+  Future<void> refreshSnapshot() async {
+    final config = _ref.read(selectedConfigProvider);
+    if (config == null || config.rootPath.isEmpty) return;
+
+    final fs = _ref.read(fsServiceProvider);
+    final currentPaths = await fs.scanPaths(
+      config.rootPath,
+      config.ignorePatterns,
+    );
+
+    final snapshots = _ref.read(projectSnapshotsProvider.notifier);
+    snapshots.state = {...snapshots.state, config.id: currentPaths};
   }
 
   Future<void> updateCurrentConfig({
@@ -117,11 +139,9 @@ class AppStateController {
   }) async {
     final current = _ref.read(selectedConfigProvider);
     if (current == null) return;
-
     final oldName = (name != null && name != current.name)
         ? current.name
         : null;
-
     final updated = current.copyWith(
       name: name,
       rootPath: rootPath,
@@ -131,12 +151,15 @@ class AppStateController {
     await _ref
         .read(configsProvider.notifier)
         .updateConfig(updated, oldName: oldName);
+
+    if (rootPath != null || ignorePatterns != null) {
+      _initializeSnapshot(current.id);
+    }
   }
 
   void toggleFile(String path, bool isIncluded) {
     final current = _ref.read(selectedConfigProvider);
     if (current == null) return;
-
     final set = current.includedFiles.toSet();
     if (isIncluded) {
       set.add(path);
@@ -147,8 +170,7 @@ class AppStateController {
   }
 
   void selectAll(TreeNode dirNode) {
-    final fs = _ref.read(fsServiceProvider);
-    final files = fs.getRecursiveFiles(dirNode);
+    final files = _ref.read(fsServiceProvider).getRecursiveFiles(dirNode);
     final current = _ref.read(selectedConfigProvider);
     if (current == null) return;
     final set = current.includedFiles.toSet()..addAll(files);
@@ -156,8 +178,10 @@ class AppStateController {
   }
 
   void selectNone(TreeNode dirNode) {
-    final fs = _ref.read(fsServiceProvider);
-    final files = fs.getRecursiveFiles(dirNode).toSet();
+    final files = _ref
+        .read(fsServiceProvider)
+        .getRecursiveFiles(dirNode)
+        .toSet();
     final current = _ref.read(selectedConfigProvider);
     if (current == null) return;
     final set = current.includedFiles.toSet()..removeAll(files);
@@ -165,11 +189,9 @@ class AppStateController {
   }
 
   void invertSelection(TreeNode dirNode) {
-    final fs = _ref.read(fsServiceProvider);
-    final files = fs.getRecursiveFiles(dirNode);
+    final files = _ref.read(fsServiceProvider).getRecursiveFiles(dirNode);
     final current = _ref.read(selectedConfigProvider);
     if (current == null) return;
-
     final set = current.includedFiles.toSet();
     for (final file in files) {
       if (set.contains(file)) {
@@ -185,7 +207,6 @@ class AppStateController {
     final current = _ref.read(selectedConfigProvider);
     if (current == null) return;
     if (current.ignorePatterns.contains(pattern)) return;
-
     final set = current.ignorePatterns.toSet()..add(pattern);
     updateCurrentConfig(ignorePatterns: set.toList());
   }
@@ -193,5 +214,20 @@ class AppStateController {
   void toggleNodeExpanded(TreeNode node) {
     node.isExpanded = !node.isExpanded;
     _ref.read(treeUpdateSignalProvider.notifier).state++;
+  }
+
+  Future<void> _initializeSnapshot(String? id) async {
+    if (id == null) return;
+    final config = _ref.read(configsProvider).firstWhere((c) => c.id == id);
+    if (config.rootPath.isEmpty) return;
+
+    final fs = _ref.read(fsServiceProvider);
+    final currentPaths = await fs.scanPaths(
+      config.rootPath,
+      config.ignorePatterns,
+    );
+
+    final snapshots = _ref.read(projectSnapshotsProvider.notifier);
+    snapshots.state = {...snapshots.state, id: currentPaths};
   }
 }

@@ -6,11 +6,13 @@ class TreeNode {
     required this.isDirectory,
     this.children = const [],
     this.isExpanded = false,
+    this.isNew = false,
   });
 
   List<TreeNode> children;
   final bool isDirectory;
   bool isExpanded;
+  bool isNew;
   final String name;
   final String path;
   final String relativePath;
