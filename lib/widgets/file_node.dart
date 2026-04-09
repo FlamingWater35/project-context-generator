@@ -1,18 +1,15 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:path/path.dart' as p;
+
 import '../models/tree_node.dart';
 import '../providers/app_state.dart';
 
 class FileNodeWidget extends ConsumerWidget {
-  final TreeNode node;
-  final int depth;
+  const FileNodeWidget({super.key, required this.node, required this.depth});
 
-  const FileNodeWidget({
-    super.key,
-    required this.node,
-    required this.depth,
-  });
+  final int depth;
+  final TreeNode node;
 
   bool _hasIncludedChildren(TreeNode node, List<String> includedFiles) {
     if (!node.isDirectory) {
@@ -24,24 +21,16 @@ class FileNodeWidget extends ConsumerWidget {
     return false;
   }
 
-  String _getCompoundExtension(String filename) {
-    if (filename.startsWith('.')) {
-      return p.extension(filename);
-    }
-    final parts = filename.split('.');
-    if (parts.length > 2) {
-      return '.${parts[parts.length - 2]}.${parts.last}';
-    }
-    return p.extension(filename);
-  }
-
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final config = ref.watch(selectedConfigProvider);
     if (config == null) return const SizedBox.shrink();
 
-    final isIncluded = !node.isDirectory && config.includedFiles.contains(node.relativePath);
-    final hasIncluded = node.isDirectory ? _hasIncludedChildren(node, config.includedFiles) : isIncluded;
+    final isIncluded =
+        !node.isDirectory && config.includedFiles.contains(node.relativePath);
+    final hasIncluded = node.isDirectory
+        ? _hasIncludedChildren(node, config.includedFiles)
+        : isIncluded;
 
     final controller = ref.read(appStateControllerProvider);
 
@@ -52,10 +41,13 @@ class FileNodeWidget extends ConsumerWidget {
       ignoreTooltip = 'Ignore folder';
       ignorePattern = '${node.relativePath}/**';
     } else {
-      final ext = _getCompoundExtension(node.name);
+      final ext = p.extension(node.name);
       if (ext.isNotEmpty) {
         ignoreTooltip = 'Ignore all $ext files';
-        ignorePattern = '**/*$ext';
+        ignorePattern = '*$ext';
+      } else {
+        ignoreTooltip = 'Ignore this file';
+        ignorePattern = node.relativePath;
       }
     }
 
@@ -74,11 +66,16 @@ class FileNodeWidget extends ConsumerWidget {
       child: Padding(
         padding: const EdgeInsets.symmetric(vertical: 4.0, horizontal: 4.0),
         child: Row(
-          children:[
+          children: [
             SizedBox(width: depth * 24.0),
             if (node.isDirectory)
               IconButton(
-                icon: Icon(node.isExpanded ? Icons.keyboard_arrow_down : Icons.keyboard_arrow_right, size: 20),
+                icon: Icon(
+                  node.isExpanded
+                      ? Icons.keyboard_arrow_down
+                      : Icons.keyboard_arrow_right,
+                  size: 20,
+                ),
                 onPressed: () => controller.toggleNodeExpanded(node),
                 padding: EdgeInsets.zero,
                 constraints: const BoxConstraints(),
@@ -108,7 +105,9 @@ class FileNodeWidget extends ConsumerWidget {
               child: Text(
                 node.name,
                 style: TextStyle(
-                  color: hasIncluded || isIncluded ? Colors.white : Colors.grey.shade500,
+                  color: hasIncluded || isIncluded
+                      ? Colors.white
+                      : Colors.grey.shade500,
                   fontWeight: isIncluded ? FontWeight.bold : null,
                 ),
                 overflow: TextOverflow.ellipsis,
@@ -117,7 +116,11 @@ class FileNodeWidget extends ConsumerWidget {
 
             if (node.isDirectory) ...[
               IconButton(
-                icon: Icon(Icons.check_box, size: 18, color: Colors.grey.shade500),
+                icon: Icon(
+                  Icons.check_box,
+                  size: 18,
+                  color: Colors.grey.shade500,
+                ),
                 tooltip: 'Select all',
                 onPressed: () => controller.selectAll(node),
                 splashRadius: 16,
@@ -125,7 +128,11 @@ class FileNodeWidget extends ConsumerWidget {
                 constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
               ),
               IconButton(
-                icon: Icon(Icons.check_box_outline_blank, size: 18, color: Colors.grey.shade500),
+                icon: Icon(
+                  Icons.check_box_outline_blank,
+                  size: 18,
+                  color: Colors.grey.shade500,
+                ),
                 tooltip: 'Select none',
                 onPressed: () => controller.selectNone(node),
                 splashRadius: 16,
@@ -133,7 +140,11 @@ class FileNodeWidget extends ConsumerWidget {
                 constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
               ),
               IconButton(
-                icon: Icon(Icons.swap_horiz, size: 18, color: Colors.grey.shade500),
+                icon: Icon(
+                  Icons.swap_horiz,
+                  size: 18,
+                  color: Colors.grey.shade500,
+                ),
                 tooltip: 'Invert selection',
                 onPressed: () => controller.invertSelection(node),
                 splashRadius: 16,
@@ -143,7 +154,11 @@ class FileNodeWidget extends ConsumerWidget {
             ],
 
             IconButton(
-              icon: Icon(Icons.visibility_off, size: 18, color: Colors.grey.shade500),
+              icon: Icon(
+                Icons.visibility_off,
+                size: 18,
+                color: Colors.grey.shade500,
+              ),
               tooltip: ignoreTooltip,
               onPressed: () => controller.addIgnorePattern(ignorePattern),
               splashRadius: 16,

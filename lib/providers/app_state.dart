@@ -2,6 +2,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_riverpod/legacy.dart';
 import 'package:uuid/uuid.dart';
+
 import '../models/project_config.dart';
 import '../models/tree_node.dart';
 import '../services/config_service.dart';
@@ -10,20 +11,17 @@ import '../services/fs_service.dart';
 final configServiceProvider = Provider((ref) => ConfigService());
 final fsServiceProvider = Provider((ref) => FsService());
 
-final configsProvider = StateNotifierProvider<ConfigsNotifier, List<ProjectConfig>>((ref) {
-  return ConfigsNotifier(ref.watch(configServiceProvider));
-});
+final configsProvider =
+    StateNotifierProvider<ConfigsNotifier, List<ProjectConfig>>((ref) {
+      return ConfigsNotifier(ref.watch(configServiceProvider));
+    });
 
 class ConfigsNotifier extends StateNotifier<List<ProjectConfig>> {
-  final ConfigService _configService;
-
   ConfigsNotifier(this._configService) : super([]) {
     _load();
   }
 
-  Future<void> _load() async {
-    state = await _configService.loadConfigs();
-  }
+  final ConfigService _configService;
 
   Future<void> addConfig(String name) async {
     final newConfig = ProjectConfig(id: const Uuid().v4(), name: name);
@@ -33,15 +31,19 @@ class ConfigsNotifier extends StateNotifier<List<ProjectConfig>> {
 
   Future<void> updateConfig(ProjectConfig config, {String? oldName}) async {
     await _configService.saveConfig(config, oldName: oldName);
-    state =[
+    state = [
       for (final c in state)
-        if (c.id == config.id) config else c
+        if (c.id == config.id) config else c,
     ];
   }
 
   Future<void> deleteConfig(ProjectConfig config) async {
     await _configService.deleteConfig(config.name);
     state = state.where((c) => c.id != config.id).toList();
+  }
+
+  Future<void> _load() async {
+    state = await _configService.loadConfigs();
   }
 }
 
@@ -61,9 +63,10 @@ final selectedConfigProvider = Provider<ProjectConfig?>((ref) {
 });
 
 class _TreeConfig {
-  final String rootPath;
-  final List<String> ignorePatterns;
   _TreeConfig(this.rootPath, this.ignorePatterns);
+
+  final List<String> ignorePatterns;
+  final String rootPath;
 
   @override
   bool operator ==(Object other) =>
@@ -87,7 +90,10 @@ final fileTreeProvider = FutureProvider<TreeNode?>((ref) async {
   if (treeConfig == null) return null;
 
   final fsService = ref.watch(fsServiceProvider);
-  return await fsService.buildTree(treeConfig.rootPath, treeConfig.ignorePatterns);
+  return await fsService.buildTree(
+    treeConfig.rootPath,
+    treeConfig.ignorePatterns,
+  );
 });
 
 final treeUpdateSignalProvider = StateProvider<int>((ref) => 0);
@@ -95,8 +101,9 @@ final treeUpdateSignalProvider = StateProvider<int>((ref) => 0);
 final appStateControllerProvider = Provider((ref) => AppStateController(ref));
 
 class AppStateController {
-  final Ref _ref;
   AppStateController(this._ref);
+
+  final Ref _ref;
 
   void selectConfig(String? id) {
     _ref.read(selectedConfigIdProvider.notifier).state = id;
@@ -111,7 +118,9 @@ class AppStateController {
     final current = _ref.read(selectedConfigProvider);
     if (current == null) return;
 
-    final oldName = (name != null && name != current.name) ? current.name : null;
+    final oldName = (name != null && name != current.name)
+        ? current.name
+        : null;
 
     final updated = current.copyWith(
       name: name,
@@ -119,7 +128,9 @@ class AppStateController {
       ignorePatterns: ignorePatterns,
       includedFiles: includedFiles,
     );
-    await _ref.read(configsProvider.notifier).updateConfig(updated, oldName: oldName);
+    await _ref
+        .read(configsProvider.notifier)
+        .updateConfig(updated, oldName: oldName);
   }
 
   void toggleFile(String path, bool isIncluded) {

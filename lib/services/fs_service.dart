@@ -1,31 +1,60 @@
 import 'dart:io';
+
 import 'package:glob/glob.dart';
 import 'package:path/path.dart' as p;
+
 import '../models/tree_node.dart';
 
-class FsService {
-  bool _isIgnored(String relativePath, bool isDir, List<Glob> ignores) {
-    String normalizedPath = relativePath.replaceAll('\\', '/');
-    final pathsToTest =[
-      normalizedPath,
-      if (isDir) '$normalizedPath/',
-    ];
+class _IgnoreRule {
+  _IgnoreRule(String pattern)
+    : exact = Glob(pattern),
+      anywhere = _createAnywhereGlob(pattern),
+      rootFallback = pattern.startsWith('**/')
+          ? Glob(pattern.substring(3))
+          : null;
 
-    for (final glob in ignores) {
-      for (final path in pathsToTest) {
-        if (glob.matches(path)) {
-          return true;
-        }
-      }
+  final Glob? anywhere;
+  final Glob exact;
+  final Glob? rootFallback;
+
+  bool matches(String path, String pathWithSlash) {
+    if (exact.matches(path) || exact.matches(pathWithSlash)) return true;
+    if (anywhere != null &&
+        (anywhere!.matches(path) || anywhere!.matches(pathWithSlash))) {
+      return true;
+    }
+    if (rootFallback != null &&
+        (rootFallback!.matches(path) || rootFallback!.matches(pathWithSlash))) {
+      return true;
     }
     return false;
   }
 
-  Future<TreeNode?> buildTree(String rootPath, List<String> ignorePatterns) async {
+  static Glob? _createAnywhereGlob(String pattern) {
+    if (pattern.startsWith('**/') || pattern.startsWith('/')) return null;
+
+    final isFolderPattern = pattern.endsWith('/**');
+    final strippedFolder = isFolderPattern
+        ? pattern.substring(0, pattern.length - 3)
+        : pattern;
+
+    if (strippedFolder.contains('/')) return null;
+
+    return Glob('**/$pattern');
+  }
+}
+
+class FsService {
+  Future<TreeNode?> buildTree(
+    String rootPath,
+    List<String> ignorePatterns,
+  ) async {
     final rootDir = Directory(rootPath);
     if (!await rootDir.exists()) return null;
 
-    final ignores = ignorePatterns.map((pattern) => Glob(pattern)).toList();
+    final rules = ignorePatterns
+        .map((pattern) => _IgnoreRule(pattern))
+        .toList();
 
     TreeNode buildNode(FileSystemEntity entity, String relativePath) {
       final isDir = entity is Directory;
@@ -45,13 +74,15 @@ class FsService {
       if (!node.isDirectory) return;
 
       final dir = Directory(node.path);
-      List<TreeNode> children =[];
+      List<TreeNode> children = [];
 
       try {
         final entities = await dir.list().toList();
         for (final entity in entities) {
-          final relPath = p.relative(entity.path, from: rootPath).replaceAll('\\', '/');
-          if (!_isIgnored(relPath, entity is Directory, ignores)) {
+          final relPath = p
+              .relative(entity.path, from: rootPath)
+              .replaceAll('\\', '/');
+          if (!_isIgnored(relPath, entity is Directory, rules)) {
             final childNode = buildNode(entity, relPath);
             children.add(childNode);
 
@@ -64,7 +95,9 @@ class FsService {
         // Handle permission denied securely
       }
 
-      children.removeWhere((child) => child.isDirectory && child.children.isEmpty);
+      children.removeWhere(
+        (child) => child.isDirectory && child.children.isEmpty,
+      );
 
       children.sort((a, b) {
         if (a.isDirectory && !b.isDirectory) return -1;
@@ -90,7 +123,7 @@ class FsService {
   }
 
   List<String> getRecursiveFiles(TreeNode dirNode) {
-    List<String> files =[];
+    List<String> files = [];
     void traverse(TreeNode node) {
       if (!node.isDirectory) {
         files.add(node.relativePath);
@@ -100,7 +133,20 @@ class FsService {
         }
       }
     }
+
     traverse(dirNode);
     return files;
+  }
+
+  bool _isIgnored(String relativePath, bool isDir, List<_IgnoreRule> rules) {
+    String normalizedPath = relativePath.replaceAll('\\', '/');
+    String pathWithSlash = isDir ? '$normalizedPath/' : normalizedPath;
+
+    for (final rule in rules) {
+      if (rule.matches(normalizedPath, pathWithSlash)) {
+        return true;
+      }
+    }
+    return false;
   }
 }

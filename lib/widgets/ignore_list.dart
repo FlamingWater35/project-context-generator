@@ -1,45 +1,43 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+
 import '../models/project_config.dart';
 import '../providers/app_state.dart';
 import 'smooth_scroll.dart';
 
 class IgnoreListDialog extends ConsumerStatefulWidget {
-  final ProjectConfig config;
   const IgnoreListDialog({super.key, required this.config});
+
+  final ProjectConfig config;
 
   @override
   ConsumerState<IgnoreListDialog> createState() => _IgnoreListDialogState();
 }
 
 class _IgnoreListDialogState extends ConsumerState<IgnoreListDialog> {
-  late List<String> ignores;
-  final TextEditingController _controller = TextEditingController();
-  final SmoothScrollController _scrollController = SmoothScrollController();
-  final SmoothScrollController _presetScrollController = SmoothScrollController();
-
-  bool _showPresets = true;
-
   final List<String> commonPresets = const [
     '.git/**',
     'node_modules/**',
     'build/**',
     '.dart_tool/**',
-    '**/*.lock',
-    '**/*.g.dart',
+    '*.lock',
+    '*.g.dart',
     '.idea/**',
     '.vscode/**',
     'dist/**',
     'target/**',
     'vendor/**',
-    '**/.DS_Store',
+    '.DS_Store',
   ];
 
-  @override
-  void initState() {
-    super.initState();
-    ignores = List.from(widget.config.ignorePatterns);
-  }
+  late List<String> ignores;
+
+  final TextEditingController _controller = TextEditingController();
+  final SmoothScrollController _presetScrollController =
+      SmoothScrollController();
+
+  final SmoothScrollController _scrollController = SmoothScrollController();
+  bool _showPresets = true;
 
   @override
   void dispose() {
@@ -47,6 +45,12 @@ class _IgnoreListDialogState extends ConsumerState<IgnoreListDialog> {
     _presetScrollController.dispose();
     _controller.dispose();
     super.dispose();
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    ignores = List.from(widget.config.ignorePatterns);
   }
 
   void _addIgnore(String val) {
@@ -74,7 +78,9 @@ class _IgnoreListDialogState extends ConsumerState<IgnoreListDialog> {
           const Text('Ignore Patterns'),
           const Spacer(),
           IconButton(
-            icon: Icon(_showPresets ? Icons.view_sidebar : Icons.view_sidebar_outlined),
+            icon: Icon(
+              _showPresets ? Icons.view_sidebar : Icons.view_sidebar_outlined,
+            ),
             tooltip: _showPresets ? 'Hide Presets' : 'Show Presets',
             onPressed: () => setState(() => _showPresets = !_showPresets),
           ),
@@ -92,7 +98,9 @@ class _IgnoreListDialogState extends ConsumerState<IgnoreListDialog> {
                 children: [
                   Text(
                     'Files matching these patterns will be excluded from the generated context.',
-                    style: Theme.of(context).textTheme.bodySmall?.copyWith(color: Colors.grey.shade500),
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      color: Colors.grey.shade500,
+                    ),
                   ),
                   const SizedBox(height: 16),
                   Row(
@@ -103,7 +111,10 @@ class _IgnoreListDialogState extends ConsumerState<IgnoreListDialog> {
                           decoration: const InputDecoration(
                             hintText: 'Add custom pattern (e.g. **/temp/*)',
                             border: OutlineInputBorder(),
-                            contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                            contentPadding: EdgeInsets.symmetric(
+                              horizontal: 12,
+                              vertical: 8,
+                            ),
                           ),
                           onSubmitted: _addIgnore,
                         ),
@@ -112,7 +123,7 @@ class _IgnoreListDialogState extends ConsumerState<IgnoreListDialog> {
                       IconButton.filled(
                         icon: const Icon(Icons.add),
                         onPressed: () => _addIgnore(_controller.text),
-                      )
+                      ),
                     ],
                   ),
                   const SizedBox(height: 16),
@@ -125,8 +136,11 @@ class _IgnoreListDialogState extends ConsumerState<IgnoreListDialog> {
                       ),
                       child: ignores.isEmpty
                           ? Center(
-                              child: Text('No active ignore patterns.',
-                              style: TextStyle(color: Colors.grey.shade600)))
+                              child: Text(
+                                'No active ignore patterns.',
+                                style: TextStyle(color: Colors.grey.shade600),
+                              ),
+                            )
                           : Scrollbar(
                               controller: _scrollController,
                               thumbVisibility: true,
@@ -134,13 +148,23 @@ class _IgnoreListDialogState extends ConsumerState<IgnoreListDialog> {
                                 controller: _scrollController,
                                 padding: EdgeInsets.zero,
                                 itemCount: ignores.length,
-                                separatorBuilder: (ctx, i) => Divider(height: 1, color: Colors.white.withAlpha(10)),
+                                separatorBuilder: (ctx, i) => Divider(
+                                  height: 1,
+                                  color: Colors.white.withAlpha(10),
+                                ),
                                 itemBuilder: (ctx, i) => ListTile(
                                   dense: true,
-                                  title: Text(ignores[i], style: const TextStyle(fontFamily: 'monospace', fontSize: 13)),
+                                  title: Text(
+                                    ignores[i],
+                                    style: const TextStyle(
+                                      fontFamily: 'monospace',
+                                      fontSize: 13,
+                                    ),
+                                  ),
                                   trailing: IconButton(
                                     icon: const Icon(Icons.close, size: 16),
-                                    onPressed: () => setState(() => ignores.removeAt(i)),
+                                    onPressed: () =>
+                                        setState(() => ignores.removeAt(i)),
                                   ),
                                 ),
                               ),
@@ -158,7 +182,10 @@ class _IgnoreListDialogState extends ConsumerState<IgnoreListDialog> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text('Common Presets', style: Theme.of(context).textTheme.titleSmall),
+                    Text(
+                      'Common Presets',
+                      style: Theme.of(context).textTheme.titleSmall,
+                    ),
                     const SizedBox(height: 12),
                     Expanded(
                       child: Scrollbar(
@@ -174,7 +201,10 @@ class _IgnoreListDialogState extends ConsumerState<IgnoreListDialog> {
                                 final isAdded = ignores.contains(preset);
                                 return FilterChip(
                                   visualDensity: VisualDensity.compact,
-                                  label: Text(preset, style: const TextStyle(fontSize: 11)),
+                                  label: Text(
+                                    preset,
+                                    style: const TextStyle(fontSize: 11),
+                                  ),
                                   selected: isAdded,
                                   onSelected: (selected) {
                                     setState(() {
@@ -206,7 +236,9 @@ class _IgnoreListDialogState extends ConsumerState<IgnoreListDialog> {
         ),
         FilledButton(
           onPressed: () {
-            ref.read(appStateControllerProvider).updateCurrentConfig(ignorePatterns: ignores);
+            ref
+                .read(appStateControllerProvider)
+                .updateCurrentConfig(ignorePatterns: ignores);
             Navigator.pop(context);
           },
           child: const Text('Apply Changes'),

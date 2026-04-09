@@ -2,8 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:path/path.dart' as p;
-import '../providers/app_state.dart';
+
 import '../models/tree_node.dart';
+import '../providers/app_state.dart';
 import 'snackbar.dart';
 
 class GenerateButton extends ConsumerWidget {
@@ -20,17 +21,25 @@ class GenerateButton extends ConsumerWidget {
         }
       }
     }
+
     traverse(node);
     return set;
   }
 
-  void _buildTreeString(TreeNode node, StringBuffer buffer, String prefix, Set<String> included) {
+  void _buildTreeString(
+    TreeNode node,
+    StringBuffer buffer,
+    String prefix,
+    Set<String> included,
+  ) {
     final children = node.children;
     for (int i = 0; i < children.length; i++) {
       final child = children[i];
       final isLast = i == children.length - 1;
       final connector = isLast ? '└── ' : '├── ';
-      buffer.writeln('$prefix$connector${child.name}${child.isDirectory ? '/' : ''}');
+      buffer.writeln(
+        '$prefix$connector${child.name}${child.isDirectory ? '/' : ''}',
+      );
 
       if (child.isDirectory) {
         final childPrefix = isLast ? '    ' : '│   ';
@@ -54,11 +63,16 @@ class GenerateButton extends ConsumerWidget {
         final fsService = ref.read(fsServiceProvider);
         final visibleFiles = _getVisibleFiles(treeNode);
 
-        final effectiveIncluded = config.includedFiles.toSet().intersection(visibleFiles);
+        final effectiveIncluded = config.includedFiles.toSet().intersection(
+          visibleFiles,
+        );
 
         if (effectiveIncluded.isEmpty) {
           if (context.mounted) {
-            showSnackBar(context, message: 'No files selected or all selected files are ignored.');
+            showSnackBar(
+              context,
+              message: 'No files selected or all selected files are ignored.',
+            );
           }
           return;
         }

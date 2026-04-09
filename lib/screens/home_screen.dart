@@ -1,45 +1,15 @@
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:file_picker/file_picker.dart';
+
 import '../providers/app_state.dart';
+import '../widgets/generate_button.dart';
+import '../widgets/ignore_list.dart';
 import '../widgets/sidebar.dart';
 import '../widgets/tree_view.dart';
-import '../widgets/ignore_list.dart';
-import '../widgets/generate_button.dart';
 
 class HomeScreen extends ConsumerWidget {
   const HomeScreen({super.key});
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final config = ref.watch(selectedConfigProvider);
-
-    return Scaffold(
-      body: Row(
-        children: [
-          const Sidebar(),
-          const VerticalDivider(width: 1, thickness: 1),
-          Expanded(
-            child: config == null
-                ? const Center(child: Text('Create or select a project config.'))
-                : Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      _buildHeader(context, ref, config),
-                      Expanded(
-                        child: Material(
-                          color: Colors.transparent,
-                          clipBehavior: Clip.hardEdge,
-                          child: const ProjectTreeView(),
-                        ),
-                      ),
-                    ],
-                  ),
-          ),
-        ],
-      ),
-    );
-  }
 
   Widget _buildHeader(BuildContext context, WidgetRef ref, config) {
     return Card(
@@ -81,10 +51,12 @@ class HomeScreen extends ConsumerWidget {
               children: [
                 Expanded(
                   child: Text(
-                    config.rootPath.isEmpty ? 'No root folder selected' : config.rootPath,
+                    config.rootPath.isEmpty
+                        ? 'No root folder selected'
+                        : config.rootPath,
                     style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                          color: Theme.of(context).colorScheme.onSurfaceVariant,
-                        ),
+                      color: Theme.of(context).colorScheme.onSurfaceVariant,
+                    ),
                     overflow: TextOverflow.ellipsis,
                     maxLines: 1,
                   ),
@@ -92,9 +64,14 @@ class HomeScreen extends ConsumerWidget {
                 const SizedBox(width: 16),
                 ElevatedButton(
                   onPressed: () async {
-                    String? selectedDirectory = await FilePicker.getDirectoryPath(dialogTitle: 'Select root folder');
+                    String? selectedDirectory =
+                        await FilePicker.getDirectoryPath(
+                          dialogTitle: 'Select root folder',
+                        );
                     if (selectedDirectory != null) {
-                      ref.read(appStateControllerProvider).updateCurrentConfig(rootPath: selectedDirectory);
+                      ref
+                          .read(appStateControllerProvider)
+                          .updateCurrentConfig(rootPath: selectedDirectory);
                     }
                   },
                   child: const Text('Select Root Folder'),
@@ -103,6 +80,39 @@ class HomeScreen extends ConsumerWidget {
             ),
           ],
         ),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final config = ref.watch(selectedConfigProvider);
+
+    return Scaffold(
+      body: Row(
+        children: [
+          const Sidebar(),
+          const VerticalDivider(width: 1, thickness: 1),
+          Expanded(
+            child: config == null
+                ? const Center(
+                    child: Text('Create or select a project config.'),
+                  )
+                : Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      _buildHeader(context, ref, config),
+                      Expanded(
+                        child: Material(
+                          color: Colors.transparent,
+                          clipBehavior: Clip.hardEdge,
+                          child: const ProjectTreeView(),
+                        ),
+                      ),
+                    ],
+                  ),
+          ),
+        ],
       ),
     );
   }

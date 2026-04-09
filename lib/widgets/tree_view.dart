@@ -1,14 +1,16 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+
 import '../models/tree_node.dart';
 import '../providers/app_state.dart';
 import 'file_node.dart';
 import 'smooth_scroll.dart';
 
 class _FlatNode {
-  final TreeNode node;
-  final int depth;
   _FlatNode(this.node, this.depth);
+
+  final int depth;
+  final TreeNode node;
 }
 
 class ProjectTreeView extends ConsumerStatefulWidget {
@@ -46,7 +48,9 @@ class _ProjectTreeViewState extends ConsumerState<ProjectTreeView> {
     return treeAsync.when(
       data: (rootNode) {
         if (rootNode == null) {
-          return const Center(child: Text('Please select a valid root folder.'));
+          return const Center(
+            child: Text('Please select a valid root folder.'),
+          );
         }
 
         final flatNodes = _flatten(rootNode.children, 0);
@@ -56,7 +60,12 @@ class _ProjectTreeViewState extends ConsumerState<ProjectTreeView> {
           thumbVisibility: true,
           child: ListView.builder(
             controller: _scrollController,
-            padding: const EdgeInsets.only(left: 16.0, right: 24.0, top: 8.0, bottom: 8.0),
+            padding: const EdgeInsets.only(
+              left: 16.0,
+              right: 24.0,
+              top: 8.0,
+              bottom: 8.0,
+            ),
             itemCount: flatNodes.length,
             itemBuilder: (context, index) {
               final flatNode = flatNodes[index];

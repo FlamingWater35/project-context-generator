@@ -1,17 +1,29 @@
 class ProjectConfig {
-  final String id;
-  final String name;
-  final String rootPath;
-  final List<String> includedFiles;
-  final List<String> ignorePatterns;
-
   ProjectConfig({
     required this.id,
     required this.name,
     this.rootPath = '',
-    this.includedFiles = const[],
+    this.includedFiles = const [],
     this.ignorePatterns = const ['.git/**', 'node_modules/**', 'build/**'],
   });
+
+  factory ProjectConfig.fromJson(Map<String, dynamic> json) {
+    return ProjectConfig(
+      id: json['id'] as String,
+      name: json['name'] as String,
+      rootPath: json['rootPath'] as String? ?? '',
+      includedFiles: List<String>.from(json['includedFiles'] ?? []),
+      ignorePatterns: json.containsKey('ignorePatterns')
+          ? List<String>.from(json['ignorePatterns'])
+          : ['.git/**', 'node_modules/**', 'build/**'],
+    );
+  }
+
+  final String id;
+  final List<String> ignorePatterns;
+  final List<String> includedFiles;
+  final String name;
+  final String rootPath;
 
   ProjectConfig copyWith({
     String? id,
@@ -37,17 +49,5 @@ class ProjectConfig {
       'includedFiles': includedFiles,
       'ignorePatterns': ignorePatterns,
     };
-  }
-
-  factory ProjectConfig.fromJson(Map<String, dynamic> json) {
-    return ProjectConfig(
-      id: json['id'] as String,
-      name: json['name'] as String,
-      rootPath: json['rootPath'] as String? ?? '',
-      includedFiles: List<String>.from(json['includedFiles'] ??[]),
-      ignorePatterns: json.containsKey('ignorePatterns')
-          ? List<String>.from(json['ignorePatterns'])
-          :['.git/**', 'node_modules/**', 'build/**'],
-    );
   }
 }
