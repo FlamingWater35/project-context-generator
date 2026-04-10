@@ -6,6 +6,7 @@ import '../providers/app_state.dart';
 import '../widgets/generate_button.dart';
 import '../widgets/ignore_list.dart';
 import '../widgets/sidebar.dart';
+import '../widgets/snackbar.dart';
 import '../widgets/tree_view.dart';
 
 class HomeScreen extends ConsumerWidget {
@@ -71,14 +72,9 @@ class HomeScreen extends ConsumerWidget {
                         .refreshSnapshot();
                     ref.invalidate(fileTreeProvider);
                     if (context.mounted) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(
-                          content: Text(
-                            'Directory structure updated - new files marked',
-                          ),
-                          behavior: SnackBarBehavior.floating,
-                          duration: Duration(seconds: 2),
-                        ),
+                      showInfoSnackBar(
+                        context,
+                        'Directory structure updated (new files marked)',
                       );
                     }
                   },

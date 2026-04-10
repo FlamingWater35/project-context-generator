@@ -81,10 +81,9 @@ class GenerateButton extends ConsumerWidget {
 
     if (effectiveIncluded.isEmpty) {
       if (context.mounted) {
-        showSnackBar(
+        showErrorSnackBar(
           context,
-          message: 'No files selected or all selected files are ignored.',
-          isError: true,
+          'No files selected or all selected files are ignored.',
         );
       }
       return;
@@ -107,11 +106,7 @@ class GenerateButton extends ConsumerWidget {
 
     await Clipboard.setData(ClipboardData(text: buffer.toString()));
     if (context.mounted) {
-      showSnackBar(
-        context,
-        message: 'Context copied to clipboard!',
-        isError: false,
-      );
+      showSuccessSnackBar(context, 'Context copied to clipboard!');
     }
   }
 

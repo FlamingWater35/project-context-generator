@@ -1,17 +1,39 @@
 import 'package:flutter/material.dart';
 
-void showSnackBar(
+void showSuccessSnackBar(BuildContext context, String message) {
+  _showSnackBar(
+    context,
+    message: message,
+    backgroundColor: Colors.green.shade700,
+    icon: Icons.check_circle_outline,
+  );
+}
+
+void showErrorSnackBar(BuildContext context, String message) {
+  _showSnackBar(
+    context,
+    message: message,
+    backgroundColor: Colors.red.shade800,
+    icon: Icons.error_outline,
+  );
+}
+
+void showInfoSnackBar(BuildContext context, String message) {
+  _showSnackBar(
+    context,
+    message: message,
+    backgroundColor: Colors.blue.shade800,
+    icon: Icons.info_outline,
+  );
+}
+
+void _showSnackBar(
   BuildContext context, {
   required String message,
-  bool isError = false,
+  required Color backgroundColor,
+  required IconData icon,
 }) {
-  final Color backgroundColor = isError
-      ? Colors.red.shade800
-      : Colors.green.shade700;
-  final IconData icon = isError
-      ? Icons.error_outline
-      : Icons.check_circle_outline;
-  final Color contentColor = Colors.white;
+  final contentColor = Colors.white;
 
   ScaffoldMessenger.of(context).showSnackBar(
     SnackBar(
