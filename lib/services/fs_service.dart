@@ -9,7 +9,7 @@ import '../models/tree_node.dart';
 class _IgnoreRule {
   factory _IgnoreRule(String pattern) {
     String p = pattern.trim();
-    if (p.isEmpty || p.startsWith('#')) return _IgnoreRule._(null, null);
+    if (p.isEmpty || p.startsWith('#')) return _IgnoreRule._(null, null, null);
 
     bool onlyDirs = false;
     if (p.endsWith('/')) {
@@ -24,22 +24,34 @@ class _IgnoreRule {
     }
 
     bool hasInternalSlash = p.contains('/') && !p.startsWith('**/');
-    if (!isRootAnchored && !hasInternalSlash) p = '**/$p';
+
+    if (!isRootAnchored && !hasInternalSlash) {
+      final rootGlob = Glob(p);
+      final nestedGlob = Glob('**/$p');
+
+      if (onlyDirs) {
+        return _IgnoreRule._(null, null, Glob('**/$p/**'));
+      } else {
+        return _IgnoreRule._(rootGlob, nestedGlob, Glob('**/$p/**'));
+      }
+    }
 
     if (onlyDirs) {
-      return _IgnoreRule._(null, Glob('$p/**'));
+      return _IgnoreRule._(null, null, Glob('$p/**'));
     } else {
-      return _IgnoreRule._(Glob(p), Glob('$p/**'));
+      return _IgnoreRule._(Glob(p), null, Glob('$p/**'));
     }
   }
 
-  _IgnoreRule._(this.glob, this.dirGlob);
+  _IgnoreRule._(this.rootGlob, this.nestedGlob, this.dirGlob);
 
   final Glob? dirGlob;
-  final Glob? glob;
+  final Glob? nestedGlob;
+  final Glob? rootGlob;
 
   bool matches(String path, String pathWithSlash) {
-    if (glob != null && glob!.matches(path)) return true;
+    if (rootGlob != null && rootGlob!.matches(path)) return true;
+    if (nestedGlob != null && nestedGlob!.matches(path)) return true;
     if (dirGlob != null && dirGlob!.matches(pathWithSlash)) return true;
     return false;
   }
