@@ -71,26 +71,32 @@ class FsService {
     final dir = Directory(rootPath);
     if (!await dir.exists()) return paths;
 
-    try {
-      final stream = dir.list(recursive: true, followLinks: false);
+    Future<void> traverse(Directory currentDir) async {
+      try {
+        final entities = await currentDir.list(followLinks: false).toList();
+        for (final entity in entities) {
+          try {
+            final relPath = p
+                .relative(entity.path, from: rootPath)
+                .replaceAll('\\', '/');
+            final isDir = entity is Directory;
 
-      await for (final entity in stream.handleError((error) {
-        debugPrint('FsService: Skipping inaccessible path during scan: $error');
-      })) {
-        try {
-          final relPath = p
-              .relative(entity.path, from: rootPath)
-              .replaceAll('\\', '/');
-          if (!_isIgnored(relPath, entity is Directory, rules)) {
-            paths.add(relPath);
+            if (!_isIgnored(relPath, isDir, rules)) {
+              paths.add(relPath);
+              if (isDir) {
+                await traverse(entity);
+              }
+            }
+          } catch (e) {
+            continue;
           }
-        } catch (e) {
-          continue;
         }
+      } catch (e) {
+        debugPrint('FsService: Skipping inaccessible path during scan: $e');
       }
-    } catch (e) {
-      debugPrint('FsService: Fatal directory listing error: $e');
     }
+
+    await traverse(dir);
     return paths;
   }
 

@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_riverpod/legacy.dart';
+import 'package:path/path.dart' as p;
 import 'package:uuid/uuid.dart';
 
 import '../models/project_config.dart';
@@ -44,7 +45,7 @@ class ConfigsNotifier extends StateNotifier<List<ProjectConfig>> {
   }
 
   Future<void> deleteConfig(ProjectConfig config) async {
-    await _configService.deleteConfig(config.name);
+    await _configService.deleteConfig(config);
     state = state.where((c) => c.id != config.id).toList();
   }
 
@@ -64,6 +65,21 @@ final selectedConfigProvider = Provider<ProjectConfig?>((ref) {
   } catch (_) {
     return configs.isNotEmpty ? configs.first : null;
   }
+});
+
+final includedDirectoriesProvider = Provider<Set<String>>((ref) {
+  final config = ref.watch(selectedConfigProvider);
+  if (config == null) return {};
+
+  final result = <String>{};
+  for (final file in config.includedFiles) {
+    var current = p.dirname(file).replaceAll('\\', '/');
+    while (current != '.' && current != '') {
+      result.add(current);
+      current = p.dirname(current).replaceAll('\\', '/');
+    }
+  }
+  return result;
 });
 
 class _TreeConfig {

@@ -37,12 +37,6 @@ class ConfigService {
       if (await oldFile.exists()) {
         await oldFile.delete();
       }
-      final oldSnap = File(
-        p.join(configDir.path, '${_sanitize(oldName)}.snap.json'),
-      );
-      if (await oldSnap.exists()) {
-        await oldSnap.delete();
-      }
     }
     final safeName = _sanitize(config.name);
     final file = File(p.join(configDir.path, '$safeName.json'));
@@ -50,14 +44,16 @@ class ConfigService {
     await file.writeAsString(content);
   }
 
-  Future<void> deleteConfig(String name) async {
+  Future<void> deleteConfig(ProjectConfig config) async {
     final configDir = await _getConfigDir();
-    final safeName = _sanitize(name);
+    final safeName = _sanitize(config.name);
+
     final file = File(p.join(configDir.path, '$safeName.json'));
     if (await file.exists()) {
       await file.delete();
     }
-    final snapFile = File(p.join(configDir.path, '$safeName.snap.json'));
+
+    final snapFile = File(p.join(configDir.path, '${config.id}.snap.json'));
     if (await snapFile.exists()) {
       await snapFile.delete();
     }

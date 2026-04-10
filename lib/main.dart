@@ -35,12 +35,6 @@ class ProjectContextGeneratorApp extends ConsumerWidget {
       }
     });
 
-    ref.listen(selectedConfigIdProvider, (prev, next) {
-      if (next != null && prev != next) {
-        ref.read(appStateControllerProvider).selectConfig(next);
-      }
-    });
-
     return MaterialApp(
       title: 'Project Context Generator',
       theme: ThemeData.dark(useMaterial3: true),
