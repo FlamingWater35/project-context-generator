@@ -46,6 +46,8 @@ class _IgnoreRule {
 }
 
 class FsService {
+  static const int _maxFileSizeBytes = 1024 * 1024;
+
   Future<Set<String>> scanPaths(
     String rootPath,
     List<String> ignorePatterns,
@@ -102,15 +104,12 @@ class FsService {
         relativePath: relativePath,
         name: p.basename(entity.path),
         isDirectory: isDir,
-        isExpanded: relativePath.isEmpty,
         isNew: isNew,
       );
     }
 
-    final rootNode = buildNode(rootDir, '');
-
-    Future<bool> populateChildren(TreeNode node) async {
-      if (!node.isDirectory) return node.isNew;
+    Future<TreeNode> populateChildren(TreeNode node) async {
+      if (!node.isDirectory) return node;
 
       final dir = Directory(node.path);
       List<TreeNode> children = [];
@@ -129,13 +128,9 @@ class FsService {
                 .replaceAll('\\', '/');
             if (!_isIgnored(relPath, entity is Directory, rules)) {
               final childNode = buildNode(entity, relPath);
-              children.add(childNode);
-              if (childNode.isDirectory) {
-                final childHasNew = await populateChildren(childNode);
-                if (childHasNew) anyChildIsNew = true;
-              } else {
-                if (childNode.isNew) anyChildIsNew = true;
-              }
+              final populatedChild = await populateChildren(childNode);
+              children.add(populatedChild);
+              if (populatedChild.isNew) anyChildIsNew = true;
             }
           } catch (e) {
             continue;
@@ -146,28 +141,44 @@ class FsService {
       children.removeWhere(
         (child) => child.isDirectory && child.children.isEmpty,
       );
+
       children.sort((a, b) {
         if (a.isDirectory && !b.isDirectory) return -1;
         if (!a.isDirectory && b.isDirectory) return 1;
         return a.name.toLowerCase().compareTo(b.name.toLowerCase());
       });
 
-      node.children = children;
-      if (anyChildIsNew) node.isNew = true;
-      return node.isNew;
+      return node.copyWith(
+        children: children,
+        isNew: node.isNew || anyChildIsNew,
+      );
     }
 
-    await populateChildren(rootNode);
-    return rootNode;
+    final rootNode = buildNode(rootDir, '');
+    return await populateChildren(rootNode);
   }
 
   Future<String> readFile(String path) async {
     final file = File(path);
     if (!await file.exists()) return '';
+
     try {
+      final stat = await file.stat();
+      if (stat.size > _maxFileSizeBytes) {
+        return '<File too large (${(stat.size / 1024 / 1024).toStringAsFixed(2)} MB)>';
+      }
+
+      final raf = await file.open();
+      final headerBytes = await raf.read(8192);
+      await raf.close();
+
+      if (_isBinaryData(headerBytes)) {
+        return '<Binary file>';
+      }
+
       return await file.readAsString();
     } catch (e) {
-      return '<Binary or unreadable file>';
+      return '<Error reading file: $e>';
     }
   }
 
@@ -185,6 +196,26 @@ class FsService {
 
     traverse(dirNode);
     return files;
+  }
+
+  bool _isBinaryData(Uint8List data) {
+    if (data.isEmpty) return false;
+
+    int nullBytes = 0;
+    int controlChars = 0;
+
+    for (final byte in data) {
+      if (byte == 0) nullBytes++;
+      if (byte < 32 && byte != 9 && byte != 10 && byte != 13) {
+        controlChars++;
+      }
+    }
+
+    final ratio = data.length;
+    if (nullBytes > 0 && (nullBytes / ratio) > 0.01) return true;
+    if ((controlChars / ratio) > 0.1) return true;
+
+    return false;
   }
 
   bool _isIgnored(String relativePath, bool isDir, List<_IgnoreRule> rules) {

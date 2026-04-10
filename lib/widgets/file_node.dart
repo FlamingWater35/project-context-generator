@@ -24,6 +24,9 @@ class FileNodeWidget extends ConsumerWidget {
     final config = ref.watch(selectedConfigProvider);
     if (config == null) return const SizedBox.shrink();
 
+    final expansionState = ref.watch(expansionStateProvider);
+    final isExpanded = expansionState[node.relativePath] ?? false;
+
     final isIncluded =
         !node.isDirectory && config.includedFiles.contains(node.relativePath);
     final hasIncluded = node.isDirectory
@@ -40,7 +43,7 @@ class FileNodeWidget extends ConsumerWidget {
     return InkWell(
       borderRadius: BorderRadius.circular(4),
       onTap: () => node.isDirectory
-          ? controller.toggleNodeExpanded(node)
+          ? controller.toggleNodeExpanded(node.relativePath)
           : controller.toggleFile(node.relativePath, !isIncluded),
       hoverColor: Colors.white.withAlpha(13),
       splashColor: Colors.white.withAlpha(26),
@@ -53,12 +56,13 @@ class FileNodeWidget extends ConsumerWidget {
             if (node.isDirectory)
               IconButton(
                 icon: Icon(
-                  node.isExpanded
+                  isExpanded
                       ? Icons.keyboard_arrow_down
                       : Icons.keyboard_arrow_right,
                   size: 20,
                 ),
-                onPressed: () => controller.toggleNodeExpanded(node),
+                onPressed: () =>
+                    controller.toggleNodeExpanded(node.relativePath),
                 padding: EdgeInsets.zero,
                 constraints: const BoxConstraints(),
                 color: hasIncluded ? null : Colors.grey.shade600,

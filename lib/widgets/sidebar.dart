@@ -21,47 +21,87 @@ class _SidebarState extends ConsumerState<Sidebar> {
   }
 
   void _showCreateDialog(BuildContext context, WidgetRef ref) {
-    final controller = TextEditingController();
     showDialog(
       context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('New Project'),
-        content: TextField(
-          controller: controller,
-          decoration: const InputDecoration(labelText: 'Project Name'),
-          autofocus: true,
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Cancel'),
-          ),
-          FilledButton(
-            onPressed: () {
-              if (controller.text.trim().isNotEmpty) {
-                ref
-                    .read(configsProvider.notifier)
-                    .addConfig(controller.text.trim());
-              }
-              Navigator.pop(context);
-            },
-            child: const Text('Create'),
-          ),
-        ],
+      builder: (context) => StatefulBuilder(
+        builder: (context, setState) {
+          final controller = TextEditingController();
+          return AlertDialog(
+            title: const Text('New Project'),
+            content: TextField(
+              controller: controller,
+              decoration: const InputDecoration(labelText: 'Project Name'),
+              autofocus: true,
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: const Text('Cancel'),
+              ),
+              FilledButton(
+                onPressed: () {
+                  if (controller.text.trim().isNotEmpty) {
+                    ref
+                        .read(configsProvider.notifier)
+                        .addConfig(controller.text.trim());
+                  }
+                  Navigator.pop(context);
+                },
+                child: const Text('Create'),
+              ),
+            ],
+          );
+        },
       ),
     );
   }
 
   void _showRenameDialog(BuildContext context, WidgetRef ref, config) {
-    final controller = TextEditingController(text: config.name);
+    showDialog(
+      context: context,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setState) {
+          final controller = TextEditingController(text: config.name);
+          return AlertDialog(
+            title: const Text('Rename Project'),
+            content: TextField(
+              controller: controller,
+              decoration: const InputDecoration(labelText: 'Project Name'),
+              autofocus: true,
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: const Text('Cancel'),
+              ),
+              FilledButton(
+                onPressed: () {
+                  if (controller.text.trim().isNotEmpty) {
+                    ref
+                        .read(configsProvider.notifier)
+                        .updateConfig(
+                          config.copyWith(name: controller.text.trim()),
+                          oldName: config.name,
+                        );
+                  }
+                  Navigator.pop(context);
+                },
+                child: const Text('Rename'),
+              ),
+            ],
+          );
+        },
+      ),
+    );
+  }
+
+  void _showDeleteConfirmation(BuildContext context, WidgetRef ref, config) {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Rename Project'),
-        content: TextField(
-          controller: controller,
-          decoration: const InputDecoration(labelText: 'Project Name'),
-          autofocus: true,
+        title: const Text('Delete Project'),
+        content: Text(
+          'Are you sure you want to delete "${config.name}"? This cannot be undone.',
         ),
         actions: [
           TextButton(
@@ -69,18 +109,12 @@ class _SidebarState extends ConsumerState<Sidebar> {
             child: const Text('Cancel'),
           ),
           FilledButton(
+            style: FilledButton.styleFrom(backgroundColor: Colors.red),
             onPressed: () {
-              if (controller.text.trim().isNotEmpty) {
-                ref
-                    .read(configsProvider.notifier)
-                    .updateConfig(
-                      config.copyWith(name: controller.text.trim()),
-                      oldName: config.name,
-                    );
-              }
+              ref.read(configsProvider.notifier).deleteConfig(config);
               Navigator.pop(context);
             },
-            child: const Text('Rename'),
+            child: const Text('Delete'),
           ),
         ],
       ),
@@ -180,11 +214,8 @@ class _SidebarState extends ConsumerState<Sidebar> {
                           ),
                           IconButton(
                             icon: const Icon(Icons.delete, size: 16),
-                            onPressed: () {
-                              ref
-                                  .read(configsProvider.notifier)
-                                  .deleteConfig(config);
-                            },
+                            onPressed: () =>
+                                _showDeleteConfirmation(context, ref, config),
                             color: Colors.grey.shade500,
                           ),
                         ],

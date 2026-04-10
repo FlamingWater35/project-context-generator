@@ -135,7 +135,13 @@ class GenerateButton extends ConsumerWidget {
     String prefix,
     Set<String> included,
   ) {
-    final children = node.children;
+    final children = node.children.where((child) {
+      if (!child.isDirectory) {
+        return included.contains(child.relativePath);
+      }
+      return _hasIncludedDescendant(child, included);
+    }).toList();
+
     for (int i = 0; i < children.length; i++) {
       final child = children[i];
       final isLast = i == children.length - 1;
@@ -152,6 +158,18 @@ class GenerateButton extends ConsumerWidget {
         );
       }
     }
+  }
+
+  bool _hasIncludedDescendant(TreeNode node, Set<String> included) {
+    if (!node.isDirectory) return included.contains(node.relativePath);
+    for (final child in node.children) {
+      if (!child.isDirectory) {
+        if (included.contains(child.relativePath)) return true;
+      } else {
+        if (_hasIncludedDescendant(child, included)) return true;
+      }
+    }
+    return false;
   }
 
   @override

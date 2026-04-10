@@ -30,11 +30,15 @@ class _ProjectTreeViewState extends ConsumerState<ProjectTreeView> {
   }
 
   List<_FlatNode> _flatten(List<TreeNode> nodes, int depth) {
+    final expansionState = ref.watch(expansionStateProvider);
     final result = <_FlatNode>[];
     for (final node in nodes) {
       result.add(_FlatNode(node, depth));
-      if (node.isDirectory && node.isExpanded) {
-        result.addAll(_flatten(node.children, depth + 1));
+      if (node.isDirectory) {
+        final isExpanded = expansionState[node.relativePath] ?? false;
+        if (isExpanded) {
+          result.addAll(_flatten(node.children, depth + 1));
+        }
       }
     }
     return result;
@@ -44,6 +48,7 @@ class _ProjectTreeViewState extends ConsumerState<ProjectTreeView> {
   Widget build(BuildContext context) {
     final treeAsync = ref.watch(fileTreeProvider);
     ref.watch(treeUpdateSignalProvider);
+    ref.watch(expansionStateProvider);
 
     return treeAsync.when(
       data: (rootNode) {

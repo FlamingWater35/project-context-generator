@@ -15,6 +15,8 @@ final projectSnapshotsProvider = StateProvider<Map<String, Set<String>>>(
   (ref) => {},
 );
 
+final expansionStateProvider = StateProvider<Map<String, bool>>((ref) => {});
+
 final configsProvider =
     StateNotifierProvider<ConfigsNotifier, List<ProjectConfig>>((ref) {
       return ConfigsNotifier(ref.watch(configServiceProvider));
@@ -114,6 +116,7 @@ class AppStateController {
 
   void selectConfig(String? id) {
     _ref.read(selectedConfigIdProvider.notifier).state = id;
+    _ref.read(expansionStateProvider.notifier).state = {};
     _initializeSnapshot(id);
   }
 
@@ -153,7 +156,7 @@ class AppStateController {
         .updateConfig(updated, oldName: oldName);
 
     if (rootPath != null || ignorePatterns != null) {
-      _initializeSnapshot(current.id);
+      await _initializeSnapshot(current.id);
     }
   }
 
@@ -211,8 +214,13 @@ class AppStateController {
     updateCurrentConfig(ignorePatterns: set.toList());
   }
 
-  void toggleNodeExpanded(TreeNode node) {
-    node.isExpanded = !node.isExpanded;
+  void toggleNodeExpanded(String nodePath) {
+    final currentState = _ref.read(expansionStateProvider);
+    final isCurrentlyExpanded = currentState[nodePath] ?? false;
+    _ref.read(expansionStateProvider.notifier).state = {
+      ...currentState,
+      nodePath: !isCurrentlyExpanded,
+    };
     _ref.read(treeUpdateSignalProvider.notifier).state++;
   }
 
