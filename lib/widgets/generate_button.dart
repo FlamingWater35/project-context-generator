@@ -50,7 +50,9 @@ class GenerateButton extends ConsumerWidget {
         );
 
         if (shouldRegenerate == true) {
-          await ref.read(appStateControllerProvider).refreshSnapshot();
+          await ref
+              .read(appStateControllerProvider)
+              .refreshSnapshot(acknowledge: true);
           ref.invalidate(fileTreeProvider);
 
           await Future.delayed(const Duration(milliseconds: 100));

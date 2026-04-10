@@ -29,8 +29,14 @@ class ProjectContextGeneratorApp extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    ref.listen(configsProvider, (prev, next) {
+      if (next.isNotEmpty && ref.read(selectedConfigIdProvider) == null) {
+        ref.read(appStateControllerProvider).selectConfig(next.first.id);
+      }
+    });
+
     ref.listen(selectedConfigIdProvider, (prev, next) {
-      if (next != null) {
+      if (next != null && prev != next) {
         ref.read(appStateControllerProvider).selectConfig(next);
       }
     });

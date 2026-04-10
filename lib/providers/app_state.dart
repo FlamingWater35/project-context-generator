@@ -120,7 +120,7 @@ class AppStateController {
     _loadPersistedSnapshot(id);
   }
 
-  Future<void> refreshSnapshot() async {
+  Future<void> refreshSnapshot({bool acknowledge = false}) async {
     final config = _ref.read(selectedConfigProvider);
     if (config == null || config.rootPath.isEmpty) return;
 
@@ -130,11 +130,13 @@ class AppStateController {
       config.ignorePatterns,
     );
 
-    final snapshots = _ref.read(projectSnapshotsProvider.notifier);
-    snapshots.state = {...snapshots.state, config.id: currentPaths};
-
     final configService = _ref.read(configServiceProvider);
     await configService.saveSnapshot(config.id, currentPaths);
+
+    if (acknowledge) {
+      final snapshots = _ref.read(projectSnapshotsProvider.notifier);
+      snapshots.state = {...snapshots.state, config.id: currentPaths};
+    }
   }
 
   Future<void> updateCurrentConfig({
@@ -160,6 +162,7 @@ class AppStateController {
 
     if (rootPath != null || ignorePatterns != null) {
       await _resetSnapshotBaseline(current.id);
+      _ref.invalidate(fileTreeProvider);
     }
   }
 

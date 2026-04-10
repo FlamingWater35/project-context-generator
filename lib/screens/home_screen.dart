@@ -62,6 +62,28 @@ class HomeScreen extends ConsumerWidget {
                   ),
                 ),
                 const SizedBox(width: 16),
+                ElevatedButton.icon(
+                  icon: const Icon(Icons.refresh, size: 18),
+                  label: const Text('Check for Changes'),
+                  onPressed: () async {
+                    await ref
+                        .read(appStateControllerProvider)
+                        .refreshSnapshot();
+                    ref.invalidate(fileTreeProvider);
+                    if (context.mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text(
+                            'Directory structure updated - new files marked',
+                          ),
+                          behavior: SnackBarBehavior.floating,
+                          duration: Duration(seconds: 2),
+                        ),
+                      );
+                    }
+                  },
+                ),
+                const SizedBox(width: 8),
                 ElevatedButton(
                   onPressed: () async {
                     String? selectedDirectory =
