@@ -96,7 +96,7 @@ final fileTreeProvider = FutureProvider<TreeNode?>((ref) async {
   final snapshots = ref.watch(projectSnapshotsProvider);
   final config = ref.read(selectedConfigProvider);
 
-  final knownPaths = config != null ? snapshots[config.id] : null;
+  final knownPaths = config != null ? (snapshots[config.id] ?? {}) : null;
 
   final fsService = ref.watch(fsServiceProvider);
   return await fsService.buildTree(
@@ -117,7 +117,7 @@ class AppStateController {
   void selectConfig(String? id) {
     _ref.read(selectedConfigIdProvider.notifier).state = id;
     _ref.read(expansionStateProvider.notifier).state = {};
-    _initializeSnapshot(id);
+    _loadPersistedSnapshot(id);
   }
 
   Future<void> refreshSnapshot() async {
@@ -132,6 +132,9 @@ class AppStateController {
 
     final snapshots = _ref.read(projectSnapshotsProvider.notifier);
     snapshots.state = {...snapshots.state, config.id: currentPaths};
+
+    final configService = _ref.read(configServiceProvider);
+    await configService.saveSnapshot(config.id, currentPaths);
   }
 
   Future<void> updateCurrentConfig({
@@ -156,7 +159,7 @@ class AppStateController {
         .updateConfig(updated, oldName: oldName);
 
     if (rootPath != null || ignorePatterns != null) {
-      await _initializeSnapshot(current.id);
+      await _resetSnapshotBaseline(current.id);
     }
   }
 
@@ -224,9 +227,34 @@ class AppStateController {
     _ref.read(treeUpdateSignalProvider.notifier).state++;
   }
 
-  Future<void> _initializeSnapshot(String? id) async {
+  Future<void> _loadPersistedSnapshot(String? id) async {
     if (id == null) return;
     final config = _ref.read(configsProvider).firstWhere((c) => c.id == id);
+    if (config.rootPath.isEmpty) return;
+
+    final configService = _ref.read(configServiceProvider);
+    final persistedSnapshot = await configService.loadSnapshot(id);
+
+    final snapshots = _ref.read(projectSnapshotsProvider.notifier);
+
+    if (persistedSnapshot != null) {
+      snapshots.state = {...snapshots.state, id: persistedSnapshot};
+    } else {
+      final fs = _ref.read(fsServiceProvider);
+      final currentPaths = await fs.scanPaths(
+        config.rootPath,
+        config.ignorePatterns,
+      );
+
+      await configService.saveSnapshot(id, currentPaths);
+      snapshots.state = {...snapshots.state, id: currentPaths};
+    }
+  }
+
+  Future<void> _resetSnapshotBaseline(String configId) async {
+    final config = _ref
+        .read(configsProvider)
+        .firstWhere((c) => c.id == configId);
     if (config.rootPath.isEmpty) return;
 
     final fs = _ref.read(fsServiceProvider);
@@ -235,7 +263,10 @@ class AppStateController {
       config.ignorePatterns,
     );
 
+    final configService = _ref.read(configServiceProvider);
+    await configService.saveSnapshot(configId, currentPaths);
+
     final snapshots = _ref.read(projectSnapshotsProvider.notifier);
-    snapshots.state = {...snapshots.state, id: currentPaths};
+    snapshots.state = {...snapshots.state, configId: currentPaths};
   }
 }
