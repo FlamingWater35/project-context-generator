@@ -71,13 +71,23 @@ class HomeScreen extends ConsumerWidget {
                 ElevatedButton.icon(
                   icon: const Icon(Icons.refresh, size: 18),
                   label: const Text('Check for Changes'),
-                  onPressed: () {
+                  onPressed: () async {
                     ref.invalidate(fileTreeProvider);
-                    if (context.mounted) {
-                      showInfoSnackBar(
-                        context,
-                        'Directory structure updated (new files marked)',
-                      );
+                    try {
+                      await ref.read(fileTreeProvider.future);
+                      if (context.mounted) {
+                        showInfoSnackBar(
+                          context,
+                          'Directory structure updated (new files marked)',
+                        );
+                      }
+                    } catch (e) {
+                      if (context.mounted) {
+                        showErrorSnackBar(
+                          context,
+                          'Failed to update directory structure: $e',
+                        );
+                      }
                     }
                   },
                 ),

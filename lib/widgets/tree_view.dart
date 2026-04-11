@@ -55,6 +55,10 @@ class _ProjectTreeViewState extends ConsumerState<ProjectTreeView> {
     final treeAsync = ref.watch(fileTreeProvider);
     ref.watch(expansionStateProvider);
 
+    if (treeAsync.isLoading) {
+      return const Center(child: CircularProgressIndicator());
+    }
+
     return treeAsync.when(
       data: (rootNode) {
         if (rootNode == null) {

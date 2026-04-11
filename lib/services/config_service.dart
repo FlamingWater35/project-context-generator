@@ -75,10 +75,7 @@ class ConfigService {
       await legacyFile.delete();
     }
 
-    final snapFile = File(p.join(configDir.path, '${config.id}.snap.json'));
-    if (await snapFile.exists()) {
-      await snapFile.delete();
-    }
+    await deleteSnapshot(config.id);
   }
 
   Future<Set<String>?> loadSnapshot(String configId) async {
@@ -106,6 +103,18 @@ class ConfigService {
       await file.writeAsString(content);
     } catch (e) {
       debugPrint('Failed to save snapshot: $e');
+    }
+  }
+
+  Future<void> deleteSnapshot(String configId) async {
+    try {
+      final configDir = await _getConfigDir();
+      final file = File(p.join(configDir.path, '$configId.snap.json'));
+      if (await file.exists()) {
+        await file.delete();
+      }
+    } catch (e) {
+      debugPrint('Failed to delete snapshot: $e');
     }
   }
 

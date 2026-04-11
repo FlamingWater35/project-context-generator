@@ -117,6 +117,9 @@ final treeConfigProvider = Provider<_TreeConfig?>((ref) {
 });
 
 final fileTreeProvider = FutureProvider<TreeNode?>((ref) async {
+  bool mounted = true;
+  ref.onDispose(() => mounted = false);
+
   final treeConfig = ref.watch(treeConfigProvider);
   if (treeConfig == null) return null;
 
@@ -127,21 +130,33 @@ final fileTreeProvider = FutureProvider<TreeNode?>((ref) async {
     final configService = ref.read(configServiceProvider);
     knownPaths = await configService.loadSnapshot(treeConfig.configId);
 
+    if (!mounted) return null;
+
     if (knownPaths == null) {
       final fs = ref.read(fsServiceProvider);
       knownPaths = await fs.scanPaths(
         treeConfig.rootPath,
         treeConfig.ignorePatterns,
       );
+
+      if (!mounted) return null;
+
       await configService.saveSnapshot(treeConfig.configId, knownPaths);
     }
 
-    Future.microtask(() {
-      final notifier = ref.read(projectSnapshotsProvider.notifier);
-      if (!notifier.state.containsKey(treeConfig.configId)) {
-        notifier.state = {...notifier.state, treeConfig.configId: knownPaths!};
-      }
-    });
+    if (mounted) {
+      Future.microtask(() {
+        if (mounted) {
+          final notifier = ref.read(projectSnapshotsProvider.notifier);
+          if (!notifier.state.containsKey(treeConfig.configId)) {
+            notifier.state = {
+              ...notifier.state,
+              treeConfig.configId: knownPaths!,
+            };
+          }
+        }
+      });
+    }
   }
 
   final fsService = ref.read(fsServiceProvider);
@@ -181,29 +196,31 @@ class AppStateController {
     snapshots.state = {...snapshots.state, config.id: currentPaths};
   }
 
-  void updateCurrentConfig({
+  Future<void> updateCurrentConfig({
     String? name,
     String? rootPath,
     List<String>? ignorePatterns,
     List<String>? includedFiles,
-  }) {
+  }) async {
     final current = _ref.read(selectedConfigProvider);
     if (current == null) return;
+
     final oldName = (name != null && name != current.name)
         ? current.name
         : null;
+
     final updated = current.copyWith(
       name: name,
       rootPath: rootPath,
       ignorePatterns: ignorePatterns,
       includedFiles: includedFiles,
     );
-    _ref.read(configsProvider.notifier).updateConfig(updated, oldName: oldName);
 
     if (rootPath != null || ignorePatterns != null) {
-      _resetSnapshotBaseline(current.id);
-      _ref.invalidate(fileTreeProvider);
+      await _clearSnapshot(current.id);
     }
+
+    _ref.read(configsProvider.notifier).updateConfig(updated, oldName: oldName);
   }
 
   void toggleFile(String path, bool isIncluded) {
@@ -269,23 +286,13 @@ class AppStateController {
     };
   }
 
-  Future<void> _resetSnapshotBaseline(String configId) async {
-    final config = _ref
-        .read(configsProvider)
-        .where((c) => c.id == configId)
-        .firstOrNull;
-    if (config == null || config.rootPath.isEmpty) return;
-
-    final fs = _ref.read(fsServiceProvider);
-    final currentPaths = await fs.scanPaths(
-      config.rootPath,
-      config.ignorePatterns,
-    );
+  Future<void> _clearSnapshot(String configId) async {
+    final snapshots = _ref.read(projectSnapshotsProvider.notifier);
+    final newSnaps = Map<String, Set<String>>.from(snapshots.state);
+    newSnaps.remove(configId);
+    snapshots.state = newSnaps;
 
     final configService = _ref.read(configServiceProvider);
-    await configService.saveSnapshot(configId, currentPaths);
-
-    final snapshots = _ref.read(projectSnapshotsProvider.notifier);
-    snapshots.state = {...snapshots.state, configId: currentPaths};
+    await configService.deleteSnapshot(configId);
   }
 }
