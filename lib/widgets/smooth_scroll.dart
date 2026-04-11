@@ -44,13 +44,13 @@ class SmoothScrollPosition extends ScrollPositionWithSingleContext {
       _targetPixels = pixels;
     }
 
-    _targetPixels += delta * 2.0;
+    _targetPixels += delta;
     _targetPixels = _targetPixels.clamp(minScrollExtent, maxScrollExtent);
 
     animateTo(
       _targetPixels,
-      duration: const Duration(milliseconds: 250),
-      curve: Curves.easeOutCubic,
+      duration: const Duration(milliseconds: 150),
+      curve: Curves.easeOutQuad,
     );
   }
 }

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../models/project_config.dart';
 import '../providers/app_state.dart';
 import 'smooth_scroll.dart';
 
@@ -24,81 +25,81 @@ class _SidebarState extends ConsumerState<Sidebar> {
   }
 
   void _showCreateDialog(BuildContext context, WidgetRef ref) {
+    final controller = TextEditingController();
     showDialog(
       context: context,
-      builder: (context) => StatefulBuilder(
-        builder: (context, setState) {
-          final controller = TextEditingController();
-          return AlertDialog(
-            title: const Text('New Project'),
-            content: TextField(
-              controller: controller,
-              decoration: const InputDecoration(labelText: 'Project Name'),
-              autofocus: true,
-            ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(context),
-                child: const Text('Cancel'),
-              ),
-              FilledButton(
-                onPressed: () {
-                  if (controller.text.trim().isNotEmpty) {
-                    ref
-                        .read(configsProvider.notifier)
-                        .addConfig(controller.text.trim());
-                  }
-                  Navigator.pop(context);
-                },
-                child: const Text('Create'),
-              ),
-            ],
-          );
-        },
+      builder: (context) => AlertDialog(
+        title: const Text('New Project'),
+        content: TextField(
+          controller: controller,
+          decoration: const InputDecoration(labelText: 'Project Name'),
+          autofocus: true,
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () {
+              if (controller.text.trim().isNotEmpty) {
+                ref
+                    .read(configsProvider.notifier)
+                    .addConfig(controller.text.trim());
+              }
+              Navigator.pop(context);
+            },
+            child: const Text('Create'),
+          ),
+        ],
       ),
-    );
+    ).then((_) => controller.dispose());
   }
 
-  void _showRenameDialog(BuildContext context, WidgetRef ref, config) {
+  void _showRenameDialog(
+    BuildContext context,
+    WidgetRef ref,
+    ProjectConfig config,
+  ) {
+    final controller = TextEditingController(text: config.name);
     showDialog(
       context: context,
-      builder: (context) => StatefulBuilder(
-        builder: (context, setState) {
-          final controller = TextEditingController(text: config.name);
-          return AlertDialog(
-            title: const Text('Rename Project'),
-            content: TextField(
-              controller: controller,
-              decoration: const InputDecoration(labelText: 'Project Name'),
-              autofocus: true,
-            ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(context),
-                child: const Text('Cancel'),
-              ),
-              FilledButton(
-                onPressed: () {
-                  if (controller.text.trim().isNotEmpty) {
-                    ref
-                        .read(configsProvider.notifier)
-                        .updateConfig(
-                          config.copyWith(name: controller.text.trim()),
-                          oldName: config.name,
-                        );
-                  }
-                  Navigator.pop(context);
-                },
-                child: const Text('Rename'),
-              ),
-            ],
-          );
-        },
+      builder: (context) => AlertDialog(
+        title: const Text('Rename Project'),
+        content: TextField(
+          controller: controller,
+          decoration: const InputDecoration(labelText: 'Project Name'),
+          autofocus: true,
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () {
+              if (controller.text.trim().isNotEmpty) {
+                ref
+                    .read(configsProvider.notifier)
+                    .updateConfig(
+                      config.copyWith(name: controller.text.trim()),
+                      oldName: config.name,
+                    );
+              }
+              Navigator.pop(context);
+            },
+            child: const Text('Rename'),
+          ),
+        ],
       ),
-    );
+    ).then((_) => controller.dispose());
   }
 
-  void _showDeleteConfirmation(BuildContext context, WidgetRef ref, config) {
+  void _showDeleteConfirmation(
+    BuildContext context,
+    WidgetRef ref,
+    ProjectConfig config,
+  ) {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(

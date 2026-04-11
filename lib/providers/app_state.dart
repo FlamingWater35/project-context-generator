@@ -1,7 +1,8 @@
+import 'dart:async';
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_riverpod/legacy.dart';
-import 'package:path/path.dart' as p;
 import 'package:uuid/uuid.dart';
 
 import '../models/project_config.dart';
@@ -20,15 +21,17 @@ final expansionStateProvider = StateProvider<Map<String, bool>>((ref) => {});
 
 final configsProvider =
     StateNotifierProvider<ConfigsNotifier, List<ProjectConfig>>((ref) {
-      return ConfigsNotifier(ref.watch(configServiceProvider));
+      return ConfigsNotifier(ref, ref.watch(configServiceProvider));
     });
 
 class ConfigsNotifier extends StateNotifier<List<ProjectConfig>> {
-  ConfigsNotifier(this._configService) : super([]) {
+  ConfigsNotifier(this._ref, this._configService) : super([]) {
     _load();
   }
 
   final ConfigService _configService;
+  final Ref _ref;
+  Timer? _saveTimer;
 
   Future<void> addConfig(String name) async {
     final newConfig = ProjectConfig(id: const Uuid().v4(), name: name);
@@ -36,17 +39,33 @@ class ConfigsNotifier extends StateNotifier<List<ProjectConfig>> {
     state = [...state, newConfig];
   }
 
-  Future<void> updateConfig(ProjectConfig config, {String? oldName}) async {
-    await _configService.saveConfig(config, oldName: oldName);
+  void updateConfig(ProjectConfig config, {String? oldName}) {
     state = [
       for (final c in state)
         if (c.id == config.id) config else c,
     ];
+
+    _saveTimer?.cancel();
+    _saveTimer = Timer(const Duration(milliseconds: 300), () {
+      _configService.saveConfig(config, oldName: oldName);
+    });
   }
 
   Future<void> deleteConfig(ProjectConfig config) async {
     await _configService.deleteConfig(config);
     state = state.where((c) => c.id != config.id).toList();
+
+    final currentSelectedId = _ref.read(selectedConfigIdProvider);
+    if (currentSelectedId == config.id) {
+      _ref.read(selectedConfigIdProvider.notifier).state = state.isNotEmpty
+          ? state.first.id
+          : null;
+    }
+
+    final snapshots = _ref.read(projectSnapshotsProvider.notifier);
+    final newSnapshots = Map<String, Set<String>>.from(snapshots.state);
+    newSnapshots.remove(config.id);
+    snapshots.state = newSnapshots;
   }
 
   Future<void> _load() async {
@@ -59,32 +78,22 @@ final selectedConfigIdProvider = StateProvider<String?>((ref) => null);
 final selectedConfigProvider = Provider<ProjectConfig?>((ref) {
   final configs = ref.watch(configsProvider);
   final selectedId = ref.watch(selectedConfigIdProvider);
-  if (selectedId == null) return configs.isNotEmpty ? configs.first : null;
-  try {
-    return configs.firstWhere((c) => c.id == selectedId);
-  } catch (_) {
-    return configs.isNotEmpty ? configs.first : null;
-  }
-});
+  if (configs.isEmpty) return null;
 
-final includedDirectoriesProvider = Provider<Set<String>>((ref) {
-  final config = ref.watch(selectedConfigProvider);
-  if (config == null) return {};
+  final config = configs.where((c) => c.id == selectedId).firstOrNull;
+  if (config != null) return config;
 
-  final result = <String>{};
-  for (final file in config.includedFiles) {
-    var current = p.dirname(file).replaceAll('\\', '/');
-    while (current != '.' && current != '') {
-      result.add(current);
-      current = p.dirname(current).replaceAll('\\', '/');
-    }
-  }
-  return result;
+  Future.microtask(() {
+    ref.read(selectedConfigIdProvider.notifier).state = configs.first.id;
+  });
+
+  return configs.first;
 });
 
 class _TreeConfig {
-  _TreeConfig(this.rootPath, this.ignorePatterns);
+  _TreeConfig(this.configId, this.rootPath, this.ignorePatterns);
 
+  final String configId;
   final List<String> ignorePatterns;
   final String rootPath;
 
@@ -92,29 +101,50 @@ class _TreeConfig {
   bool operator ==(Object other) =>
       identical(this, other) ||
       other is _TreeConfig &&
+          configId == other.configId &&
           rootPath == other.rootPath &&
           listEquals(ignorePatterns, other.ignorePatterns);
 
   @override
-  int get hashCode => rootPath.hashCode ^ Object.hashAll(ignorePatterns);
+  int get hashCode =>
+      Object.hash(configId, rootPath, Object.hashAll(ignorePatterns));
 }
 
 final treeConfigProvider = Provider<_TreeConfig?>((ref) {
   final config = ref.watch(selectedConfigProvider);
   if (config == null || config.rootPath.isEmpty) return null;
-  return _TreeConfig(config.rootPath, config.ignorePatterns);
+  return _TreeConfig(config.id, config.rootPath, config.ignorePatterns);
 });
 
 final fileTreeProvider = FutureProvider<TreeNode?>((ref) async {
   final treeConfig = ref.watch(treeConfigProvider);
   if (treeConfig == null) return null;
 
-  final snapshots = ref.watch(projectSnapshotsProvider);
-  final config = ref.read(selectedConfigProvider);
+  final snapshots = ref.read(projectSnapshotsProvider);
+  Set<String>? knownPaths = snapshots[treeConfig.configId];
 
-  final knownPaths = config != null ? (snapshots[config.id] ?? {}) : null;
+  if (knownPaths == null) {
+    final configService = ref.read(configServiceProvider);
+    knownPaths = await configService.loadSnapshot(treeConfig.configId);
 
-  final fsService = ref.watch(fsServiceProvider);
+    if (knownPaths == null) {
+      final fs = ref.read(fsServiceProvider);
+      knownPaths = await fs.scanPaths(
+        treeConfig.rootPath,
+        treeConfig.ignorePatterns,
+      );
+      await configService.saveSnapshot(treeConfig.configId, knownPaths);
+    }
+
+    Future.microtask(() {
+      final notifier = ref.read(projectSnapshotsProvider.notifier);
+      if (!notifier.state.containsKey(treeConfig.configId)) {
+        notifier.state = {...notifier.state, treeConfig.configId: knownPaths!};
+      }
+    });
+  }
+
+  final fsService = ref.read(fsServiceProvider);
   return await fsService.buildTree(
     treeConfig.rootPath,
     treeConfig.ignorePatterns,
@@ -122,7 +152,6 @@ final fileTreeProvider = FutureProvider<TreeNode?>((ref) async {
   );
 });
 
-final treeUpdateSignalProvider = StateProvider<int>((ref) => 0);
 final appStateControllerProvider = Provider((ref) => AppStateController(ref));
 
 class AppStateController {
@@ -133,10 +162,9 @@ class AppStateController {
   void selectConfig(String? id) {
     _ref.read(selectedConfigIdProvider.notifier).state = id;
     _ref.read(expansionStateProvider.notifier).state = {};
-    _loadPersistedSnapshot(id);
   }
 
-  Future<void> refreshSnapshot({bool acknowledge = false}) async {
+  Future<void> acknowledgeChanges() async {
     final config = _ref.read(selectedConfigProvider);
     if (config == null || config.rootPath.isEmpty) return;
 
@@ -149,18 +177,16 @@ class AppStateController {
     final configService = _ref.read(configServiceProvider);
     await configService.saveSnapshot(config.id, currentPaths);
 
-    if (acknowledge) {
-      final snapshots = _ref.read(projectSnapshotsProvider.notifier);
-      snapshots.state = {...snapshots.state, config.id: currentPaths};
-    }
+    final snapshots = _ref.read(projectSnapshotsProvider.notifier);
+    snapshots.state = {...snapshots.state, config.id: currentPaths};
   }
 
-  Future<void> updateCurrentConfig({
+  void updateCurrentConfig({
     String? name,
     String? rootPath,
     List<String>? ignorePatterns,
     List<String>? includedFiles,
-  }) async {
+  }) {
     final current = _ref.read(selectedConfigProvider);
     if (current == null) return;
     final oldName = (name != null && name != current.name)
@@ -172,12 +198,10 @@ class AppStateController {
       ignorePatterns: ignorePatterns,
       includedFiles: includedFiles,
     );
-    await _ref
-        .read(configsProvider.notifier)
-        .updateConfig(updated, oldName: oldName);
+    _ref.read(configsProvider.notifier).updateConfig(updated, oldName: oldName);
 
     if (rootPath != null || ignorePatterns != null) {
-      await _resetSnapshotBaseline(current.id);
+      _resetSnapshotBaseline(current.id);
       _ref.invalidate(fileTreeProvider);
     }
   }
@@ -243,38 +267,14 @@ class AppStateController {
       ...currentState,
       nodePath: !isCurrentlyExpanded,
     };
-    _ref.read(treeUpdateSignalProvider.notifier).state++;
-  }
-
-  Future<void> _loadPersistedSnapshot(String? id) async {
-    if (id == null) return;
-    final config = _ref.read(configsProvider).firstWhere((c) => c.id == id);
-    if (config.rootPath.isEmpty) return;
-
-    final configService = _ref.read(configServiceProvider);
-    final persistedSnapshot = await configService.loadSnapshot(id);
-
-    final snapshots = _ref.read(projectSnapshotsProvider.notifier);
-
-    if (persistedSnapshot != null) {
-      snapshots.state = {...snapshots.state, id: persistedSnapshot};
-    } else {
-      final fs = _ref.read(fsServiceProvider);
-      final currentPaths = await fs.scanPaths(
-        config.rootPath,
-        config.ignorePatterns,
-      );
-
-      await configService.saveSnapshot(id, currentPaths);
-      snapshots.state = {...snapshots.state, id: currentPaths};
-    }
   }
 
   Future<void> _resetSnapshotBaseline(String configId) async {
     final config = _ref
         .read(configsProvider)
-        .firstWhere((c) => c.id == configId);
-    if (config.rootPath.isEmpty) return;
+        .where((c) => c.id == configId)
+        .firstOrNull;
+    if (config == null || config.rootPath.isEmpty) return;
 
     final fs = _ref.read(fsServiceProvider);
     final currentPaths = await fs.scanPaths(

@@ -19,7 +19,15 @@ class ConfigService {
         try {
           final content = await entity.readAsString();
           final json = jsonDecode(content);
-          configs.add(ProjectConfig.fromJson(json));
+          final config = ProjectConfig.fromJson(json);
+          configs.add(config);
+
+          final expectedFileName = '${config.id}.json';
+          final actualFileName = p.basename(entity.path);
+          if (actualFileName != expectedFileName) {
+            final newFile = File(p.join(entity.parent.path, expectedFileName));
+            await entity.rename(newFile.path);
+          }
         } catch (e) {
           // Ignore invalid files gracefully
         }
@@ -30,6 +38,7 @@ class ConfigService {
 
   Future<void> saveConfig(ProjectConfig config, {String? oldName}) async {
     final configDir = await _getConfigDir();
+
     if (oldName != null && oldName != config.name) {
       final oldFile = File(
         p.join(configDir.path, '${_sanitize(oldName)}.json'),
@@ -38,19 +47,32 @@ class ConfigService {
         await oldFile.delete();
       }
     }
-    final safeName = _sanitize(config.name);
-    final file = File(p.join(configDir.path, '$safeName.json'));
+
+    final legacyFile = File(
+      p.join(configDir.path, '${_sanitize(config.name)}.json'),
+    );
+    if (await legacyFile.exists()) {
+      await legacyFile.delete();
+    }
+
+    final file = File(p.join(configDir.path, '${config.id}.json'));
     final content = jsonEncode(config.toJson());
     await file.writeAsString(content);
   }
 
   Future<void> deleteConfig(ProjectConfig config) async {
     final configDir = await _getConfigDir();
-    final safeName = _sanitize(config.name);
 
-    final file = File(p.join(configDir.path, '$safeName.json'));
+    final file = File(p.join(configDir.path, '${config.id}.json'));
     if (await file.exists()) {
       await file.delete();
+    }
+
+    final legacyFile = File(
+      p.join(configDir.path, '${_sanitize(config.name)}.json'),
+    );
+    if (await legacyFile.exists()) {
+      await legacyFile.delete();
     }
 
     final snapFile = File(p.join(configDir.path, '${config.id}.snap.json'));

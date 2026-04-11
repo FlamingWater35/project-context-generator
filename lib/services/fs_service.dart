@@ -8,51 +8,84 @@ import '../models/tree_node.dart';
 
 class _IgnoreRule {
   factory _IgnoreRule(String pattern) {
-    String p = pattern.trim();
-    if (p.isEmpty || p.startsWith('#')) return _IgnoreRule._(null, null, null);
+    String pStr = pattern.trim();
+    if (pStr.isEmpty || pStr.startsWith('#')) {
+      return _IgnoreRule._(null, null, null, null);
+    }
 
     bool onlyDirs = false;
-    if (p.endsWith('/')) {
+    if (pStr.endsWith('/')) {
       onlyDirs = true;
-      p = p.substring(0, p.length - 1);
+      pStr = pStr.substring(0, pStr.length - 1);
+    }
+
+    String pruneP = pStr;
+    if (pruneP.endsWith('/**')) {
+      pruneP = pruneP.substring(0, pruneP.length - 3);
+    } else if (pruneP.endsWith('/*')) {
+      pruneP = pruneP.substring(0, pruneP.length - 2);
     }
 
     bool isRootAnchored = false;
-    if (p.startsWith('/')) {
+    if (pStr.startsWith('/')) {
       isRootAnchored = true;
-      p = p.substring(1);
+      pStr = pStr.substring(1);
+      if (pruneP.startsWith('/')) pruneP = pruneP.substring(1);
     }
 
-    bool hasInternalSlash = p.contains('/') && !p.startsWith('**/');
+    String pStrForSlashCheck = pStr;
+    if (pStrForSlashCheck.endsWith('/**')) {
+      pStrForSlashCheck = pStrForSlashCheck.substring(
+        0,
+        pStrForSlashCheck.length - 3,
+      );
+    } else if (pStrForSlashCheck.endsWith('/*')) {
+      pStrForSlashCheck = pStrForSlashCheck.substring(
+        0,
+        pStrForSlashCheck.length - 2,
+      );
+    }
+
+    bool hasInternalSlash =
+        pStrForSlashCheck.contains('/') && !pStrForSlashCheck.startsWith('**/');
+
+    Glob? rootGlob;
+    Glob? nestedGlob;
+    Glob? dirGlob;
+    Glob? pruneGlob;
 
     if (!isRootAnchored && !hasInternalSlash) {
-      final rootGlob = Glob(p);
-      final nestedGlob = Glob('**/$p');
-
-      if (onlyDirs) {
-        return _IgnoreRule._(null, null, Glob('**/$p/**'));
-      } else {
-        return _IgnoreRule._(rootGlob, nestedGlob, Glob('**/$p/**'));
-      }
-    }
-
-    if (onlyDirs) {
-      return _IgnoreRule._(null, null, Glob('$p/**'));
+      if (!onlyDirs) rootGlob = Glob(pStr);
+      if (!onlyDirs) nestedGlob = Glob('**/$pStr');
+      dirGlob = Glob('**/$pStr/**');
+      if (pruneP.isNotEmpty) pruneGlob = Glob('**/$pruneP');
     } else {
-      return _IgnoreRule._(Glob(p), null, Glob('$p/**'));
+      if (!onlyDirs) rootGlob = Glob(pStr);
+      dirGlob = Glob('$pStr/**');
+      if (pruneP.isNotEmpty) pruneGlob = Glob(pruneP);
     }
+
+    return _IgnoreRule._(rootGlob, nestedGlob, dirGlob, pruneGlob);
   }
 
-  _IgnoreRule._(this.rootGlob, this.nestedGlob, this.dirGlob);
+  _IgnoreRule._(this.rootGlob, this.nestedGlob, this.dirGlob, this.pruneGlob);
 
   final Glob? dirGlob;
   final Glob? nestedGlob;
+  final Glob? pruneGlob;
   final Glob? rootGlob;
 
   bool matches(String path, String pathWithSlash) {
     if (rootGlob != null && rootGlob!.matches(path)) return true;
     if (nestedGlob != null && nestedGlob!.matches(path)) return true;
     if (dirGlob != null && dirGlob!.matches(pathWithSlash)) return true;
+    return false;
+  }
+
+  bool matchesDir(String path) {
+    if (pruneGlob != null && pruneGlob!.matches(path)) return true;
+    if (rootGlob != null && rootGlob!.matches(path)) return true;
+    if (nestedGlob != null && nestedGlob!.matches(path)) return true;
     return false;
   }
 }
@@ -81,7 +114,23 @@ class FsService {
                 .replaceAll('\\', '/');
             final isDir = entity is Directory;
 
-            if (!_isIgnored(relPath, isDir, rules)) {
+            bool skip = false;
+            for (final rule in rules) {
+              if (isDir) {
+                if (rule.matchesDir(relPath) ||
+                    rule.matches(relPath, '$relPath/')) {
+                  skip = true;
+                  break;
+                }
+              } else {
+                if (rule.matches(relPath, relPath)) {
+                  skip = true;
+                  break;
+                }
+              }
+            }
+
+            if (!skip) {
               paths.add(relPath);
               if (isDir) {
                 await traverse(entity);
@@ -134,17 +183,31 @@ class FsService {
       bool anyChildIsNew = false;
 
       try {
-        final entities = await dir.list().toList().catchError((e) {
-          debugPrint('FsService: Cannot list directory ${node.path}: $e');
-          return <FileSystemEntity>[];
-        });
-
+        final entities = await dir.list().toList();
         for (final entity in entities) {
           try {
             final relPath = p
                 .relative(entity.path, from: rootPath)
                 .replaceAll('\\', '/');
-            if (!_isIgnored(relPath, entity is Directory, rules)) {
+            final isDir = entity is Directory;
+
+            bool skip = false;
+            for (final rule in rules) {
+              if (isDir) {
+                if (rule.matchesDir(relPath) ||
+                    rule.matches(relPath, '$relPath/')) {
+                  skip = true;
+                  break;
+                }
+              } else {
+                if (rule.matches(relPath, relPath)) {
+                  skip = true;
+                  break;
+                }
+              }
+            }
+
+            if (!skip) {
               final childNode = buildNode(entity, relPath);
               final populatedChild = await populateChildren(childNode);
               children.add(populatedChild);
@@ -154,7 +217,9 @@ class FsService {
             continue;
           }
         }
-      } catch (_) {}
+      } catch (e) {
+        debugPrint('FsService: Cannot list directory ${node.path}: $e');
+      }
 
       children.removeWhere(
         (child) => child.isDirectory && child.children.isEmpty,
@@ -229,19 +294,10 @@ class FsService {
       }
     }
 
-    final ratio = data.length;
-    if (nullBytes > 0 && (nullBytes / ratio) > 0.01) return true;
-    if ((controlChars / ratio) > 0.1) return true;
+    final length = data.length;
+    if (nullBytes > 0 && (nullBytes / length) > 0.01) return true;
+    if ((controlChars / length) > 0.1) return true;
 
-    return false;
-  }
-
-  bool _isIgnored(String relativePath, bool isDir, List<_IgnoreRule> rules) {
-    String normalizedPath = relativePath.replaceAll('\\', '/');
-    String pathWithSlash = isDir ? '$normalizedPath/' : normalizedPath;
-    for (final rule in rules) {
-      if (rule.matches(normalizedPath, pathWithSlash)) return true;
-    }
     return false;
   }
 }

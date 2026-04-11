@@ -53,7 +53,6 @@ class _ProjectTreeViewState extends ConsumerState<ProjectTreeView> {
   @override
   Widget build(BuildContext context) {
     final treeAsync = ref.watch(fileTreeProvider);
-    ref.watch(treeUpdateSignalProvider);
     ref.watch(expansionStateProvider);
 
     return treeAsync.when(

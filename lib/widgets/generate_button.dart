@@ -60,12 +60,9 @@ class _GenerateButtonState extends ConsumerState<GenerateButton> {
           );
 
           if (shouldRegenerate == true) {
-            await ref
-                .read(appStateControllerProvider)
-                .refreshSnapshot(acknowledge: true);
+            await ref.read(appStateControllerProvider).acknowledgeChanges();
             ref.invalidate(fileTreeProvider);
 
-            await Future.delayed(const Duration(milliseconds: 100));
             if (mounted) await _performCopy();
           }
         }

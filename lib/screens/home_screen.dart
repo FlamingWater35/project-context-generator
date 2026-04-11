@@ -2,6 +2,7 @@ import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../models/project_config.dart';
 import '../providers/app_state.dart';
 import '../widgets/generate_button.dart';
 import '../widgets/ignore_list.dart';
@@ -12,7 +13,11 @@ import '../widgets/tree_view.dart';
 class HomeScreen extends ConsumerWidget {
   const HomeScreen({super.key});
 
-  Widget _buildHeader(BuildContext context, WidgetRef ref, config) {
+  Widget _buildHeader(
+    BuildContext context,
+    WidgetRef ref,
+    ProjectConfig config,
+  ) {
     return Card(
       margin: const EdgeInsets.fromLTRB(16.0, 16.0, 16.0, 8.0),
       elevation: 2,
@@ -66,10 +71,7 @@ class HomeScreen extends ConsumerWidget {
                 ElevatedButton.icon(
                   icon: const Icon(Icons.refresh, size: 18),
                   label: const Text('Check for Changes'),
-                  onPressed: () async {
-                    await ref
-                        .read(appStateControllerProvider)
-                        .refreshSnapshot();
+                  onPressed: () {
                     ref.invalidate(fileTreeProvider);
                     if (context.mounted) {
                       showInfoSnackBar(
@@ -82,14 +84,23 @@ class HomeScreen extends ConsumerWidget {
                 const SizedBox(width: 8),
                 ElevatedButton(
                   onPressed: () async {
-                    String? selectedDirectory =
-                        await FilePicker.getDirectoryPath(
-                          dialogTitle: 'Select root folder',
+                    try {
+                      String? selectedDirectory =
+                          await FilePicker.getDirectoryPath(
+                            dialogTitle: 'Select root folder',
+                          );
+                      if (selectedDirectory != null) {
+                        ref
+                            .read(appStateControllerProvider)
+                            .updateCurrentConfig(rootPath: selectedDirectory);
+                      }
+                    } catch (e) {
+                      if (context.mounted) {
+                        showErrorSnackBar(
+                          context,
+                          'Failed to pick directory: $e',
                         );
-                    if (selectedDirectory != null) {
-                      ref
-                          .read(appStateControllerProvider)
-                          .updateCurrentConfig(rootPath: selectedDirectory);
+                      }
                     }
                   },
                   child: const Text('Select Root Folder'),
