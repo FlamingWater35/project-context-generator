@@ -62,11 +62,11 @@ class FileNodeWidget extends ConsumerWidget {
             SizedBox(width: depth * 24.0),
             if (node.isDirectory)
               IconButton(
-                icon: Icon(
-                  isExpanded
-                      ? Icons.keyboard_arrow_down
-                      : Icons.keyboard_arrow_right,
-                  size: 20,
+                icon: AnimatedRotation(
+                  turns: isExpanded ? 0.25 : 0.0,
+                  duration: const Duration(milliseconds: 200),
+                  curve: Curves.easeInOut,
+                  child: const Icon(Icons.keyboard_arrow_right, size: 20),
                 ),
                 onPressed: () =>
                     controller.toggleNodeExpanded(node.relativePath),

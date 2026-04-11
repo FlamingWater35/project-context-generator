@@ -6,11 +6,58 @@ import '../providers/app_state.dart';
 import 'file_node.dart';
 import 'smooth_scroll.dart';
 
-class _FlatNode {
-  _FlatNode(this.node, this.depth);
+class _RecursiveDirectoryNode extends ConsumerWidget {
+  const _RecursiveDirectoryNode({
+    super.key,
+    required this.node,
+    required this.depth,
+  });
 
   final int depth;
   final TreeNode node;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final expansionState = ref.watch(expansionStateProvider);
+    final isExpanded = expansionState[node.relativePath] ?? false;
+
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        FileNodeWidget(
+          key: ValueKey('${node.path}_file'),
+          node: node,
+          depth: depth,
+        ),
+        AnimatedSize(
+          duration: const Duration(milliseconds: 200),
+          curve: Curves.easeInOut,
+          alignment: Alignment.topCenter,
+          child: isExpanded
+              ? Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: node.children.map((child) {
+                    if (child.isDirectory) {
+                      return _RecursiveDirectoryNode(
+                        key: ValueKey(child.path),
+                        node: child,
+                        depth: depth + 1,
+                      );
+                    }
+                    return FileNodeWidget(
+                      key: ValueKey(child.path),
+                      node: child,
+                      depth: depth + 1,
+                    );
+                  }).toList(),
+                )
+              : const SizedBox.shrink(),
+        ),
+      ],
+    );
+  }
 }
 
 class ProjectTreeView extends ConsumerStatefulWidget {
@@ -22,7 +69,6 @@ class ProjectTreeView extends ConsumerStatefulWidget {
 
 class _ProjectTreeViewState extends ConsumerState<ProjectTreeView> {
   final ScrollController _horizontalController = ScrollController();
-  int _maxDepth = 0;
   final SmoothScrollController _scrollController = SmoothScrollController();
 
   @override
@@ -32,28 +78,30 @@ class _ProjectTreeViewState extends ConsumerState<ProjectTreeView> {
     super.dispose();
   }
 
-  List<_FlatNode> _flatten(List<TreeNode> nodes, int depth) {
-    final expansionState = ref.watch(expansionStateProvider);
-    final result = <_FlatNode>[];
-
-    if (depth > _maxDepth) _maxDepth = depth;
-
+  int _calculateMaxVisibleDepth(
+    List<TreeNode> nodes,
+    Map<String, bool> expansionState,
+    int currentDepth,
+  ) {
+    int maxD = currentDepth;
     for (final node in nodes) {
-      result.add(_FlatNode(node, depth));
-      if (node.isDirectory) {
-        final isExpanded = expansionState[node.relativePath] ?? false;
-        if (isExpanded) {
-          result.addAll(_flatten(node.children, depth + 1));
-        }
+      if (currentDepth > maxD) maxD = currentDepth;
+      if (node.isDirectory && (expansionState[node.relativePath] ?? false)) {
+        final d = _calculateMaxVisibleDepth(
+          node.children,
+          expansionState,
+          currentDepth + 1,
+        );
+        if (d > maxD) maxD = d;
       }
     }
-    return result;
+    return maxD;
   }
 
   @override
   Widget build(BuildContext context) {
     final treeAsync = ref.watch(fileTreeProvider);
-    ref.watch(expansionStateProvider);
+    final expansionState = ref.watch(expansionStateProvider);
 
     return treeAsync.when(
       data: (rootNode) {
@@ -63,30 +111,36 @@ class _ProjectTreeViewState extends ConsumerState<ProjectTreeView> {
           );
         }
 
-        _maxDepth = 0;
-        final flatNodes = _flatten(rootNode.children, 0);
-
-        final requiredWidth = _maxDepth * 24.0 + 350.0;
+        final maxDepth = _calculateMaxVisibleDepth(
+          rootNode.children,
+          expansionState,
+          0,
+        );
+        final requiredWidth = maxDepth * 24.0 + 350.0;
 
         return LayoutBuilder(
           builder: (context, constraints) {
+            final targetWidth = requiredWidth > constraints.maxWidth
+                ? requiredWidth
+                : constraints.maxWidth;
+
             return Scrollbar(
               controller: _horizontalController,
               thumbVisibility: true,
               child: SingleChildScrollView(
                 controller: _horizontalController,
                 scrollDirection: Axis.horizontal,
-                child: ConstrainedBox(
+                child: AnimatedContainer(
+                  duration: const Duration(milliseconds: 200),
+                  curve: Curves.easeInOut,
                   constraints: BoxConstraints(
                     minWidth: constraints.maxWidth,
-                    maxWidth: requiredWidth > constraints.maxWidth
-                        ? requiredWidth
-                        : constraints.maxWidth,
+                    maxWidth: targetWidth,
                   ),
                   child: Scrollbar(
                     controller: _scrollController,
                     thumbVisibility: true,
-                    child: ListView.builder(
+                    child: SingleChildScrollView(
                       controller: _scrollController,
                       padding: const EdgeInsets.only(
                         left: 16.0,
@@ -94,15 +148,23 @@ class _ProjectTreeViewState extends ConsumerState<ProjectTreeView> {
                         top: 8.0,
                         bottom: 8.0,
                       ),
-                      itemCount: flatNodes.length,
-                      itemBuilder: (context, index) {
-                        final flatNode = flatNodes[index];
-                        return FileNodeWidget(
-                          key: ValueKey(flatNode.node.path),
-                          node: flatNode.node,
-                          depth: flatNode.depth,
-                        );
-                      },
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: rootNode.children.map((child) {
+                          if (child.isDirectory) {
+                            return _RecursiveDirectoryNode(
+                              key: ValueKey(child.path),
+                              node: child,
+                              depth: 0,
+                            );
+                          }
+                          return FileNodeWidget(
+                            key: ValueKey(child.path),
+                            node: child,
+                            depth: 0,
+                          );
+                        }).toList(),
+                      ),
                     ),
                   ),
                 ),
