@@ -13,10 +13,13 @@ class Sidebar extends ConsumerStatefulWidget {
 
 class _SidebarState extends ConsumerState<Sidebar> {
   final SmoothScrollController _scrollController = SmoothScrollController();
+  final TextEditingController _searchController = TextEditingController();
+  String _searchQuery = '';
 
   @override
   void dispose() {
     _scrollController.dispose();
+    _searchController.dispose();
     super.dispose();
   }
 
@@ -123,10 +126,25 @@ class _SidebarState extends ConsumerState<Sidebar> {
 
   @override
   Widget build(BuildContext context) {
-    final configs = ref.watch(configsProvider);
+    final allConfigs = ref.watch(configsProvider);
+    var configs = allConfigs.toList();
+
+    configs.sort((a, b) {
+      int cmp = a.name.toLowerCase().compareTo(b.name.toLowerCase());
+      if (cmp != 0) return cmp;
+      return a.id.compareTo(b.id);
+    });
+
+    if (_searchQuery.trim().isNotEmpty) {
+      final query = _searchQuery.trim().toLowerCase();
+      configs = configs
+          .where((c) => c.name.toLowerCase().contains(query))
+          .toList();
+    }
+
     final selectedId =
         ref.watch(selectedConfigIdProvider) ??
-        (configs.isNotEmpty ? configs.first.id : null);
+        (allConfigs.isNotEmpty ? allConfigs.first.id : null);
 
     return Material(
       elevation: 2,
@@ -151,6 +169,28 @@ class _SidebarState extends ConsumerState<Sidebar> {
                     },
                   ),
                 ],
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.symmetric(
+                horizontal: 16.0,
+              ).copyWith(bottom: 8.0),
+              child: TextField(
+                controller: _searchController,
+                decoration: InputDecoration(
+                  hintText: 'Search projects...',
+                  prefixIcon: const Icon(Icons.search, size: 20),
+                  isDense: true,
+                  contentPadding: const EdgeInsets.all(8),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                ),
+                onChanged: (val) {
+                  setState(() {
+                    _searchQuery = val;
+                  });
+                },
               ),
             ),
             Expanded(
@@ -193,6 +233,7 @@ class _SidebarState extends ConsumerState<Sidebar> {
                               ? Theme.of(context).colorScheme.onSurface
                               : Colors.grey.shade400,
                         ),
+                        overflow: TextOverflow.ellipsis,
                       ),
                       selected: isSelected,
                       onTap: () {

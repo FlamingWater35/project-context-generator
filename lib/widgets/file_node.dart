@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:path/path.dart' as p;
 
 import '../models/tree_node.dart';
 import '../providers/app_state.dart';
@@ -36,9 +35,17 @@ class FileNodeWidget extends ConsumerWidget {
 
     String ignorePattern = node.isDirectory
         ? '${node.relativePath}/**'
-        : (p.extension(node.name).isNotEmpty
-              ? '*${p.extension(node.name)}'
-              : node.relativePath);
+        : (() {
+            int firstDot = node.name.indexOf('.', 1);
+            if (firstDot != -1) {
+              return '*${node.name.substring(firstDot)}';
+            }
+            return node.relativePath;
+          })();
+
+    String tooltip = node.isDirectory
+        ? 'Ignore directory'
+        : 'Ignore all files with this extension ($ignorePattern)';
 
     return InkWell(
       borderRadius: BorderRadius.circular(4),
@@ -161,7 +168,7 @@ class FileNodeWidget extends ConsumerWidget {
                 size: 18,
                 color: Colors.grey.shade500,
               ),
-              tooltip: 'Ignore',
+              tooltip: tooltip,
               onPressed: () => controller.addIgnorePattern(ignorePattern),
             ),
           ],
