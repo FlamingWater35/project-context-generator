@@ -189,6 +189,14 @@ class AppStateController {
       config.ignorePatterns,
     );
 
+    final effectiveIncluded = config.includedFiles
+        .where((p) => currentPaths.contains(p))
+        .toList();
+
+    if (effectiveIncluded.length != config.includedFiles.length) {
+      await updateCurrentConfig(includedFiles: effectiveIncluded);
+    }
+
     final configService = _ref.read(configServiceProvider);
     await configService.saveSnapshot(config.id, currentPaths);
 
@@ -223,7 +231,7 @@ class AppStateController {
     _ref.read(configsProvider.notifier).updateConfig(updated, oldName: oldName);
   }
 
-  void toggleFile(String path, bool isIncluded) {
+  Future<void> toggleFile(String path, bool isIncluded) async {
     final current = _ref.read(selectedConfigProvider);
     if (current == null) return;
     final set = current.includedFiles.toSet();
@@ -232,18 +240,18 @@ class AppStateController {
     } else {
       set.remove(path);
     }
-    updateCurrentConfig(includedFiles: set.toList());
+    await updateCurrentConfig(includedFiles: set.toList());
   }
 
-  void selectAll(TreeNode dirNode) {
+  Future<void> selectAll(TreeNode dirNode) async {
     final files = _ref.read(fsServiceProvider).getRecursiveFiles(dirNode);
     final current = _ref.read(selectedConfigProvider);
     if (current == null) return;
     final set = current.includedFiles.toSet()..addAll(files);
-    updateCurrentConfig(includedFiles: set.toList());
+    await updateCurrentConfig(includedFiles: set.toList());
   }
 
-  void selectNone(TreeNode dirNode) {
+  Future<void> selectNone(TreeNode dirNode) async {
     final files = _ref
         .read(fsServiceProvider)
         .getRecursiveFiles(dirNode)
@@ -251,10 +259,10 @@ class AppStateController {
     final current = _ref.read(selectedConfigProvider);
     if (current == null) return;
     final set = current.includedFiles.toSet()..removeAll(files);
-    updateCurrentConfig(includedFiles: set.toList());
+    await updateCurrentConfig(includedFiles: set.toList());
   }
 
-  void invertSelection(TreeNode dirNode) {
+  Future<void> invertSelection(TreeNode dirNode) async {
     final files = _ref.read(fsServiceProvider).getRecursiveFiles(dirNode);
     final current = _ref.read(selectedConfigProvider);
     if (current == null) return;
@@ -266,15 +274,15 @@ class AppStateController {
         set.add(file);
       }
     }
-    updateCurrentConfig(includedFiles: set.toList());
+    await updateCurrentConfig(includedFiles: set.toList());
   }
 
-  void addIgnorePattern(String pattern) {
+  Future<void> addIgnorePattern(String pattern) async {
     final current = _ref.read(selectedConfigProvider);
     if (current == null) return;
     if (current.ignorePatterns.contains(pattern)) return;
     final set = current.ignorePatterns.toSet()..add(pattern);
-    updateCurrentConfig(ignorePatterns: set.toList());
+    await updateCurrentConfig(ignorePatterns: set.toList());
   }
 
   void toggleNodeExpanded(String nodePath) {

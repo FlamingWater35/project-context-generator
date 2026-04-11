@@ -140,7 +140,7 @@ class FileNodeWidget extends ConsumerWidget {
                   size: 18,
                   color: Colors.grey.shade500,
                 ),
-                tooltip: 'Select all',
+                tooltip: 'Select all existing files',
                 onPressed: () => controller.selectAll(node),
               ),
               IconButton(
@@ -158,7 +158,7 @@ class FileNodeWidget extends ConsumerWidget {
                   size: 18,
                   color: Colors.grey.shade500,
                 ),
-                tooltip: 'Invert selection',
+                tooltip: 'Invert selection (existing files)',
                 onPressed: () => controller.invertSelection(node),
               ),
             ],

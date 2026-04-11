@@ -100,7 +100,7 @@ class HomeScreen extends ConsumerWidget {
                             dialogTitle: 'Select root folder',
                           );
                       if (selectedDirectory != null) {
-                        ref
+                        await ref
                             .read(appStateControllerProvider)
                             .updateCurrentConfig(rootPath: selectedDirectory);
                       }

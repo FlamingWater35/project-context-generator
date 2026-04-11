@@ -1,4 +1,6 @@
 import 'dart:io';
+import 'dart:isolate';
+import 'dart:typed_data';
 
 import 'package:flutter/foundation.dart';
 import 'package:glob/glob.dart';
@@ -97,56 +99,7 @@ class FsService {
     String rootPath,
     List<String> ignorePatterns,
   ) async {
-    final rules = ignorePatterns
-        .map((pattern) => _IgnoreRule(pattern))
-        .toList();
-    final Set<String> paths = {};
-    final dir = Directory(rootPath);
-    if (!await dir.exists()) return paths;
-
-    Future<void> traverse(Directory currentDir) async {
-      try {
-        final entities = await currentDir.list(followLinks: false).toList();
-        for (final entity in entities) {
-          try {
-            final relPath = p
-                .relative(entity.path, from: rootPath)
-                .replaceAll('\\', '/');
-            final isDir = entity is Directory;
-
-            bool skip = false;
-            for (final rule in rules) {
-              if (isDir) {
-                if (rule.matchesDir(relPath) ||
-                    rule.matches(relPath, '$relPath/')) {
-                  skip = true;
-                  break;
-                }
-              } else {
-                if (rule.matches(relPath, relPath)) {
-                  skip = true;
-                  break;
-                }
-              }
-            }
-
-            if (!skip) {
-              paths.add(relPath);
-              if (isDir) {
-                await traverse(entity);
-              }
-            }
-          } catch (e) {
-            continue;
-          }
-        }
-      } catch (e) {
-        debugPrint('FsService: Skipping inaccessible path during scan: $e');
-      }
-    }
-
-    await traverse(dir);
-    return paths;
+    return Isolate.run(() => _scanPathsSync(rootPath, ignorePatterns));
   }
 
   Future<TreeNode?> buildTree(
@@ -154,91 +107,9 @@ class FsService {
     List<String> ignorePatterns, {
     Set<String>? knownPaths,
   }) async {
-    final rootDir = Directory(rootPath);
-    if (!await rootDir.exists()) return null;
-
-    final rules = ignorePatterns
-        .map((pattern) => _IgnoreRule(pattern))
-        .toList();
-
-    TreeNode buildNode(FileSystemEntity entity, String relativePath) {
-      final isDir = entity is Directory;
-      final bool isNew =
-          knownPaths != null && !knownPaths.contains(relativePath);
-
-      return TreeNode(
-        path: entity.path,
-        relativePath: relativePath,
-        name: p.basename(entity.path),
-        isDirectory: isDir,
-        isNew: isNew,
-      );
-    }
-
-    Future<TreeNode> populateChildren(TreeNode node) async {
-      if (!node.isDirectory) return node;
-
-      final dir = Directory(node.path);
-      List<TreeNode> children = [];
-      bool anyChildIsNew = false;
-
-      try {
-        final entities = await dir.list().toList();
-        for (final entity in entities) {
-          try {
-            final relPath = p
-                .relative(entity.path, from: rootPath)
-                .replaceAll('\\', '/');
-            final isDir = entity is Directory;
-
-            bool skip = false;
-            for (final rule in rules) {
-              if (isDir) {
-                if (rule.matchesDir(relPath) ||
-                    rule.matches(relPath, '$relPath/')) {
-                  skip = true;
-                  break;
-                }
-              } else {
-                if (rule.matches(relPath, relPath)) {
-                  skip = true;
-                  break;
-                }
-              }
-            }
-
-            if (!skip) {
-              final childNode = buildNode(entity, relPath);
-              final populatedChild = await populateChildren(childNode);
-              children.add(populatedChild);
-              if (populatedChild.isNew) anyChildIsNew = true;
-            }
-          } catch (e) {
-            continue;
-          }
-        }
-      } catch (e) {
-        debugPrint('FsService: Cannot list directory ${node.path}: $e');
-      }
-
-      children.removeWhere(
-        (child) => child.isDirectory && child.children.isEmpty,
-      );
-
-      children.sort((a, b) {
-        if (a.isDirectory && !b.isDirectory) return -1;
-        if (!a.isDirectory && b.isDirectory) return 1;
-        return a.name.toLowerCase().compareTo(b.name.toLowerCase());
-      });
-
-      return node.copyWith(
-        children: children,
-        isNew: node.isNew || anyChildIsNew,
-      );
-    }
-
-    final rootNode = buildNode(rootDir, '');
-    return await populateChildren(rootNode);
+    return Isolate.run(
+      () => _buildTreeSync(rootPath, ignorePatterns, knownPaths),
+    );
   }
 
   Future<String> readFile(String path) async {
@@ -279,6 +150,154 @@ class FsService {
 
     traverse(dirNode);
     return files;
+  }
+
+  static Set<String> _scanPathsSync(
+    String rootPath,
+    List<String> ignorePatterns,
+  ) {
+    final rules = ignorePatterns
+        .map((pattern) => _IgnoreRule(pattern))
+        .toList();
+    final Set<String> paths = {};
+    final dir = Directory(rootPath);
+    if (!dir.existsSync()) return paths;
+
+    void traverse(Directory currentDir) {
+      try {
+        final entities = currentDir.listSync(followLinks: false);
+        for (final entity in entities) {
+          try {
+            final relPath = p
+                .relative(entity.path, from: rootPath)
+                .replaceAll('\\', '/');
+            final isDir = entity is Directory;
+
+            bool skip = false;
+            for (final rule in rules) {
+              if (isDir) {
+                if (rule.matchesDir(relPath) ||
+                    rule.matches(relPath, '$relPath/')) {
+                  skip = true;
+                  break;
+                }
+              } else {
+                if (rule.matches(relPath, relPath)) {
+                  skip = true;
+                  break;
+                }
+              }
+            }
+
+            if (!skip) {
+              paths.add(relPath);
+              if (isDir) {
+                traverse(entity);
+              }
+            }
+          } catch (e) {
+            continue;
+          }
+        }
+      } catch (e) {
+        // Skip inaccessible directories
+      }
+    }
+
+    traverse(dir);
+    return paths;
+  }
+
+  static TreeNode? _buildTreeSync(
+    String rootPath,
+    List<String> ignorePatterns,
+    Set<String>? knownPaths,
+  ) {
+    final rootDir = Directory(rootPath);
+    if (!rootDir.existsSync()) return null;
+
+    final rules = ignorePatterns
+        .map((pattern) => _IgnoreRule(pattern))
+        .toList();
+
+    TreeNode buildNode(FileSystemEntity entity, String relativePath) {
+      final isDir = entity is Directory;
+      final bool isNew =
+          knownPaths != null && !knownPaths.contains(relativePath);
+
+      return TreeNode(
+        path: entity.path,
+        relativePath: relativePath,
+        name: p.basename(entity.path),
+        isDirectory: isDir,
+        isNew: isNew,
+      );
+    }
+
+    TreeNode populateChildren(TreeNode node) {
+      if (!node.isDirectory) return node;
+
+      final dir = Directory(node.path);
+      List<TreeNode> children = [];
+      bool anyChildIsNew = false;
+
+      try {
+        final entities = dir.listSync();
+        for (final entity in entities) {
+          try {
+            final relPath = p
+                .relative(entity.path, from: rootPath)
+                .replaceAll('\\', '/');
+            final isDir = entity is Directory;
+
+            bool skip = false;
+            for (final rule in rules) {
+              if (isDir) {
+                if (rule.matchesDir(relPath) ||
+                    rule.matches(relPath, '$relPath/')) {
+                  skip = true;
+                  break;
+                }
+              } else {
+                if (rule.matches(relPath, relPath)) {
+                  skip = true;
+                  break;
+                }
+              }
+            }
+
+            if (!skip) {
+              final childNode = buildNode(entity, relPath);
+              final populatedChild = populateChildren(childNode);
+              children.add(populatedChild);
+              if (populatedChild.isNew) anyChildIsNew = true;
+            }
+          } catch (e) {
+            continue;
+          }
+        }
+      } catch (e) {
+        // Skip inaccessible directories
+      }
+
+      children.removeWhere(
+        (child) => child.isDirectory && child.children.isEmpty,
+      );
+
+      children.sort((a, b) {
+        if (a.isDirectory && !b.isDirectory) return -1;
+        if (!a.isDirectory && b.isDirectory) return 1;
+        return a.name.toLowerCase().compareTo(b.name.toLowerCase());
+      });
+
+      return node.copyWith(
+        children: children,
+        isNew: node.isNew || anyChildIsNew,
+      );
+    }
+
+    final rootNode = buildNode(rootDir, '');
+    return populateChildren(rootNode);
   }
 
   bool _isBinaryData(Uint8List data) {

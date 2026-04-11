@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -67,8 +69,8 @@ class _IgnoreListDialogState extends ConsumerState<IgnoreListDialog> {
   Widget build(BuildContext context) {
     final screenSize = MediaQuery.of(context).size;
 
-    final dialogWidth = (screenSize.width * 0.7).clamp(600.0, 1000.0);
-    final dialogHeight = (screenSize.height * 0.7).clamp(400.0, 800.0);
+    final dialogWidth = math.min(screenSize.width * 0.9, 1000.0);
+    final dialogHeight = math.min(screenSize.height * 0.9, 800.0);
 
     return AlertDialog(
       title: Row(
@@ -235,11 +237,11 @@ class _IgnoreListDialogState extends ConsumerState<IgnoreListDialog> {
           child: const Text('Cancel'),
         ),
         FilledButton(
-          onPressed: () {
-            ref
+          onPressed: () async {
+            await ref
                 .read(appStateControllerProvider)
                 .updateCurrentConfig(ignorePatterns: ignores);
-            Navigator.pop(context);
+            if (context.mounted) Navigator.pop(context);
           },
           child: const Text('Apply Changes'),
         ),
