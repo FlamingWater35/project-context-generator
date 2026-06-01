@@ -163,13 +163,23 @@ class FsService {
     final dir = Directory(rootPath);
     if (!dir.existsSync()) return paths;
 
+    String canonicalRoot;
+    Directory canonicalDir;
+    try {
+      canonicalRoot = dir.resolveSymbolicLinksSync();
+      canonicalDir = Directory(canonicalRoot);
+    } catch (e) {
+      canonicalRoot = rootPath;
+      canonicalDir = dir;
+    }
+
     void traverse(Directory currentDir) {
       try {
         final entities = currentDir.listSync(followLinks: false);
         for (final entity in entities) {
           try {
             final relPath = p
-                .relative(entity.path, from: rootPath)
+                .relative(entity.path, from: canonicalRoot)
                 .replaceAll('\\', '/');
             final isDir = entity is Directory;
 
@@ -204,7 +214,7 @@ class FsService {
       }
     }
 
-    traverse(dir);
+    traverse(canonicalDir);
     return paths;
   }
 
@@ -213,8 +223,18 @@ class FsService {
     List<String> ignorePatterns,
     Set<String>? knownPaths,
   ) {
-    final rootDir = Directory(rootPath);
-    if (!rootDir.existsSync()) return null;
+    final dir = Directory(rootPath);
+    if (!dir.existsSync()) return null;
+
+    String canonicalRoot;
+    Directory canonicalDir;
+    try {
+      canonicalRoot = dir.resolveSymbolicLinksSync();
+      canonicalDir = Directory(canonicalRoot);
+    } catch (e) {
+      canonicalRoot = rootPath;
+      canonicalDir = dir;
+    }
 
     final rules = ignorePatterns
         .map((pattern) => _IgnoreRule(pattern))
@@ -246,7 +266,7 @@ class FsService {
         for (final entity in entities) {
           try {
             final relPath = p
-                .relative(entity.path, from: rootPath)
+                .relative(entity.path, from: canonicalRoot)
                 .replaceAll('\\', '/');
             final isDir = entity is Directory;
 
@@ -296,7 +316,7 @@ class FsService {
       );
     }
 
-    final rootNode = buildNode(rootDir, '');
+    final rootNode = buildNode(canonicalDir, '');
     return populateChildren(rootNode);
   }
 
