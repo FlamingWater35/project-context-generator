@@ -5,6 +5,7 @@ import '../models/project_config.dart';
 import '../providers/app_state.dart';
 import 'smooth_scroll.dart';
 
+// Sidebar panel presenting lists of configured projects, active project switching, and configuration creations
 class Sidebar extends ConsumerStatefulWidget {
   const Sidebar({super.key});
 
@@ -24,6 +25,7 @@ class _SidebarState extends ConsumerState<Sidebar> {
     super.dispose();
   }
 
+  // Opens a pop-up dialog to capture names for new configuration files
   void _showCreateDialog(BuildContext context, WidgetRef ref) {
     final controller = TextEditingController();
     showDialog(
@@ -41,13 +43,18 @@ class _SidebarState extends ConsumerState<Sidebar> {
             child: const Text('Cancel'),
           ),
           FilledButton(
-            onPressed: () {
-              if (controller.text.trim().isNotEmpty) {
-                ref
-                    .read(configsProvider.notifier)
-                    .addConfig(controller.text.trim());
+            onPressed: () async {
+              final trimmedText = controller.text.trim();
+              if (trimmedText.isNotEmpty) {
+                try {
+                  await ref
+                      .read(configsProvider.notifier)
+                      .addConfig(trimmedText);
+                } catch (e) {
+                  debugPrint('Could not create new project config: $e');
+                }
               }
-              Navigator.pop(context);
+              if (context.mounted) Navigator.pop(context);
             },
             child: const Text('Create'),
           ),
@@ -56,6 +63,7 @@ class _SidebarState extends ConsumerState<Sidebar> {
     ).then((_) => controller.dispose());
   }
 
+  // Launches target input dialogs enabling name overrides of configurations
   void _showRenameDialog(
     BuildContext context,
     WidgetRef ref,
@@ -78,13 +86,20 @@ class _SidebarState extends ConsumerState<Sidebar> {
           ),
           FilledButton(
             onPressed: () {
-              if (controller.text.trim().isNotEmpty) {
-                ref
-                    .read(configsProvider.notifier)
-                    .updateConfig(
-                      config.copyWith(name: controller.text.trim()),
-                      oldName: config.name,
-                    );
+              final trimmedText = controller.text.trim();
+              if (trimmedText.isNotEmpty) {
+                try {
+                  ref
+                      .read(configsProvider.notifier)
+                      .updateConfig(
+                        config.copyWith(name: trimmedText),
+                        oldName: config.name,
+                      );
+                } catch (e) {
+                  debugPrint(
+                    'Could not apply target layout rename operations: $e',
+                  );
+                }
               }
               Navigator.pop(context);
             },
@@ -95,6 +110,7 @@ class _SidebarState extends ConsumerState<Sidebar> {
     ).then((_) => controller.dispose());
   }
 
+  // Requests deletion verification before wiping files
   void _showDeleteConfirmation(
     BuildContext context,
     WidgetRef ref,
@@ -114,9 +130,13 @@ class _SidebarState extends ConsumerState<Sidebar> {
           ),
           FilledButton(
             style: FilledButton.styleFrom(backgroundColor: Colors.red),
-            onPressed: () {
-              ref.read(configsProvider.notifier).deleteConfig(config);
-              Navigator.pop(context);
+            onPressed: () async {
+              try {
+                await ref.read(configsProvider.notifier).deleteConfig(config);
+              } catch (e) {
+                debugPrint('Configuration deletion operation failed: $e');
+              }
+              if (context.mounted) Navigator.pop(context);
             },
             child: const Text('Delete'),
           ),
@@ -131,7 +151,7 @@ class _SidebarState extends ConsumerState<Sidebar> {
     var configs = allConfigs.toList();
 
     configs.sort((a, b) {
-      int cmp = a.name.toLowerCase().compareTo(b.name.toLowerCase());
+      final int cmp = a.name.toLowerCase().compareTo(b.name.toLowerCase());
       if (cmp != 0) return cmp;
       return a.id.compareTo(b.id);
     });

@@ -6,6 +6,7 @@ import '../providers/app_state.dart';
 import 'file_node.dart';
 import 'smooth_scroll.dart';
 
+// Nested directory render node that renders folders and subfolders iteratively
 class _RecursiveDirectoryNode extends ConsumerWidget {
   const _RecursiveDirectoryNode({
     super.key,
@@ -60,6 +61,7 @@ class _RecursiveDirectoryNode extends ConsumerWidget {
   }
 }
 
+// Tree view layout organizing folder hierarchies inside horizontal and vertical scrolls
 class ProjectTreeView extends ConsumerStatefulWidget {
   const ProjectTreeView({super.key});
 
@@ -78,6 +80,7 @@ class _ProjectTreeViewState extends ConsumerState<ProjectTreeView> {
     super.dispose();
   }
 
+  // Analyzes structural expansion paths to find the maximum horizontal depth
   int _calculateMaxVisibleDepth(
     List<TreeNode> nodes,
     Map<String, bool> expansionState,
@@ -148,22 +151,24 @@ class _ProjectTreeViewState extends ConsumerState<ProjectTreeView> {
                         top: 8.0,
                         bottom: 8.0,
                       ),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.stretch,
-                        children: rootNode.children.map((child) {
-                          if (child.isDirectory) {
-                            return _RecursiveDirectoryNode(
+                      child: RepaintBoundary(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: rootNode.children.map((child) {
+                            if (child.isDirectory) {
+                              return _RecursiveDirectoryNode(
+                                key: ValueKey(child.path),
+                                node: child,
+                                depth: 0,
+                              );
+                            }
+                            return FileNodeWidget(
                               key: ValueKey(child.path),
                               node: child,
                               depth: 0,
                             );
-                          }
-                          return FileNodeWidget(
-                            key: ValueKey(child.path),
-                            node: child,
-                            depth: 0,
-                          );
-                        }).toList(),
+                          }).toList(),
+                        ),
                       ),
                     ),
                   ),

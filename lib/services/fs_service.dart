@@ -1,6 +1,5 @@
 import 'dart:io';
 import 'dart:isolate';
-import 'dart:typed_data';
 
 import 'package:flutter/foundation.dart';
 import 'package:glob/glob.dart';
@@ -8,6 +7,7 @@ import 'package:path/path.dart' as p;
 
 import '../models/tree_node.dart';
 
+// Helper evaluating pattern structures to parse files matching ignore lists
 class _IgnoreRule {
   factory _IgnoreRule(String pattern) {
     String pStr = pattern.trim();
@@ -48,7 +48,7 @@ class _IgnoreRule {
       );
     }
 
-    bool hasInternalSlash =
+    final bool hasInternalSlash =
         pStrForSlashCheck.contains('/') && !pStrForSlashCheck.startsWith('**/');
 
     Glob? rootGlob;
@@ -70,13 +70,19 @@ class _IgnoreRule {
     return _IgnoreRule._(rootGlob, nestedGlob, dirGlob, pruneGlob);
   }
 
-  _IgnoreRule._(this.rootGlob, this.nestedGlob, this.dirGlob, this.pruneGlob);
+  const _IgnoreRule._(
+    this.rootGlob,
+    this.nestedGlob,
+    this.dirGlob,
+    this.pruneGlob,
+  );
 
   final Glob? dirGlob;
   final Glob? nestedGlob;
   final Glob? pruneGlob;
   final Glob? rootGlob;
 
+  // Verifies matches against normalized dynamic locations
   bool matches(String path, String pathWithSlash) {
     if (rootGlob != null && rootGlob!.matches(path)) return true;
     if (nestedGlob != null && nestedGlob!.matches(path)) return true;
@@ -84,6 +90,7 @@ class _IgnoreRule {
     return false;
   }
 
+  // Verifies matches specifically mapping to folder objects
   bool matchesDir(String path) {
     if (pruneGlob != null && pruneGlob!.matches(path)) return true;
     if (rootGlob != null && rootGlob!.matches(path)) return true;
@@ -92,9 +99,11 @@ class _IgnoreRule {
   }
 }
 
+// Background utility service analyzing directories, matching ignores, and processing files
 class FsService {
   static const int _maxFileSizeBytes = 1024 * 1024;
 
+  // Formats drive indicators on Windows platforms to avoid reference collision
   static String _normalizeDriveLetter(String path) {
     if (Platform.isWindows && path.length >= 2 && path[1] == ':') {
       return path[0].toUpperCase() + path.substring(1);
@@ -102,28 +111,41 @@ class FsService {
     return path;
   }
 
+  // Performs folder file discovery on an external Isolate to prevent UI lockups
   Future<Set<String>> scanPaths(
     String rootPath,
     List<String> ignorePatterns,
   ) async {
-    return Isolate.run(() => _scanPathsSync(rootPath, ignorePatterns));
+    try {
+      return await Isolate.run(() => _scanPathsSync(rootPath, ignorePatterns));
+    } catch (e) {
+      debugPrint('Background Isolate path execution failed: $e');
+      return const <String>{};
+    }
   }
 
+  // Assembles structural TreeNode layouts inside background workers
   Future<TreeNode?> buildTree(
     String rootPath,
     List<String> ignorePatterns, {
     Set<String>? knownPaths,
   }) async {
-    return Isolate.run(
-      () => _buildTreeSync(rootPath, ignorePatterns, knownPaths),
-    );
+    try {
+      return await Isolate.run(
+        () => _buildTreeSync(rootPath, ignorePatterns, knownPaths),
+      );
+    } catch (e) {
+      debugPrint('Background Isolate directory parsing failed: $e');
+      return null;
+    }
   }
 
+  // Safe file reader processing content boundaries, checking file size and binaries
   Future<String> readFile(String path) async {
     final file = File(path);
-    if (!await file.exists()) return '';
-
     try {
+      if (!await file.exists()) return '';
+
       final stat = await file.stat();
       if (stat.size > _maxFileSizeBytes) {
         return '<File too large (${(stat.size / 1024 / 1024).toStringAsFixed(2)} MB)>';
@@ -143,8 +165,9 @@ class FsService {
     }
   }
 
+  // Traverses structures recursively to list paths beneath a target parent
   List<String> getRecursiveFiles(TreeNode dirNode) {
-    List<String> files = [];
+    final List<String> files = [];
     void traverse(TreeNode node) {
       if (!node.isDirectory) {
         files.add(node.relativePath);
@@ -159,6 +182,7 @@ class FsService {
     return files;
   }
 
+  // Synchronous traversal analyzer logic designed for Isolate targets
   static Set<String> _scanPathsSync(
     String rootPath,
     List<String> ignorePatterns,
@@ -214,11 +238,12 @@ class FsService {
               }
             }
           } catch (e) {
+            // Inaccessible nested file or folder - skip silently to prevent scan failure
             continue;
           }
         }
       } catch (e) {
-        // Skip inaccessible directories
+        // Inaccessible directory - skip silently to prevent scan failure
       }
     }
 
@@ -226,6 +251,7 @@ class FsService {
     return paths;
   }
 
+  // Synchronous directory assembler logic designed for background Isolate runners
   static TreeNode? _buildTreeSync(
     String rootPath,
     List<String> ignorePatterns,
@@ -266,7 +292,7 @@ class FsService {
       if (!node.isDirectory) return node;
 
       final dir = Directory(node.path);
-      List<TreeNode> children = [];
+      final List<TreeNode> children = [];
       bool anyChildIsNew = false;
 
       try {
@@ -302,11 +328,12 @@ class FsService {
               if (populatedChild.isNew) anyChildIsNew = true;
             }
           } catch (e) {
+            // Inaccessible child path - skip silently to maintain scan execution
             continue;
           }
         }
       } catch (e) {
-        // Skip inaccessible directories
+        // Inaccessible parent folder - skip silently to maintain scan execution
       }
 
       children.removeWhere(
@@ -329,6 +356,7 @@ class FsService {
     return populateChildren(rootNode);
   }
 
+  // Analyzes headers to determine if files contain binary rather than text data
   bool _isBinaryData(Uint8List data) {
     if (data.isEmpty) return false;
 

@@ -7,6 +7,7 @@ import '../models/tree_node.dart';
 import '../providers/app_state.dart';
 import 'snackbar.dart';
 
+// Button that triggers directory sync-checks and copies project structure with contents to the clipboard
 class GenerateButton extends ConsumerStatefulWidget {
   const GenerateButton({super.key});
 
@@ -17,6 +18,7 @@ class GenerateButton extends ConsumerStatefulWidget {
 class _GenerateButtonState extends ConsumerState<GenerateButton> {
   bool _isLoading = false;
 
+  // Verifies disk configurations and processes text extraction
   Future<void> _handleGenerate() async {
     setState(() => _isLoading = true);
 
@@ -71,6 +73,10 @@ class _GenerateButtonState extends ConsumerState<GenerateButton> {
           await _performCopy();
         }
       }
+    } catch (e) {
+      if (mounted) {
+        showErrorSnackBar(context, 'Generation process failed: $e');
+      }
     } finally {
       if (mounted) {
         setState(() => _isLoading = false);
@@ -78,58 +84,66 @@ class _GenerateButtonState extends ConsumerState<GenerateButton> {
     }
   }
 
+  // Extracts verified documents, constructs output trees, and copies text contents onto clipboard
   Future<void> _performCopy() async {
     final config = ref.read(selectedConfigProvider);
     if (config == null) return;
 
-    final treeNode = await ref.read(fileTreeProvider.future);
-    if (treeNode == null) return;
+    try {
+      final treeNode = await ref.read(fileTreeProvider.future);
+      if (treeNode == null) return;
 
-    final fsService = ref.read(fsServiceProvider);
-    final visibleFiles = _getVisibleFiles(treeNode);
-    final effectiveIncluded = config.includedFiles.toSet().intersection(
-      visibleFiles,
-    );
+      final fsService = ref.read(fsServiceProvider);
+      final visibleFiles = _getVisibleFiles(treeNode);
+      final effectiveIncluded = config.includedFiles.toSet().intersection(
+        visibleFiles,
+      );
 
-    if (effectiveIncluded.isEmpty) {
-      if (mounted) {
-        showErrorSnackBar(
-          context,
-          'No files selected or all selected files are ignored.',
-        );
+      if (effectiveIncluded.isEmpty) {
+        if (mounted) {
+          showErrorSnackBar(
+            context,
+            'No files selected or all selected files are ignored.',
+          );
+        }
+        return;
       }
-      return;
-    }
 
-    final buffer = StringBuffer();
-    buffer.writeln('--- PROJECT CONTEXT: ${config.name} ---');
-    buffer.writeln('File Tree Structure:');
-    _buildTreeString(treeNode, buffer, '', effectiveIncluded);
-    buffer.writeln('--- MAIN FILE(S) CONTENT ---');
+      final buffer = StringBuffer();
+      buffer.writeln('--- PROJECT CONTEXT: ${config.name} ---');
+      buffer.writeln('File Tree Structure:');
+      _buildTreeString(treeNode, buffer, '', effectiveIncluded);
+      buffer.writeln('--- MAIN FILE(S) CONTENT ---');
 
-    final sortedFiles = effectiveIncluded.toList()..sort();
+      final sortedFiles = effectiveIncluded.toList()..sort();
 
-    final List<String> fileContents = await Future.wait(
-      sortedFiles.map((fileRelPath) {
-        final absolutePath = p.join(config.rootPath, fileRelPath);
-        return fsService.readFile(absolutePath);
-      }),
-    );
+      final List<String> fileContents = await Future.wait(
+        sortedFiles.map((fileRelPath) {
+          final absolutePath = p.join(config.rootPath, fileRelPath);
+          return fsService.readFile(absolutePath);
+        }),
+      );
 
-    for (int i = 0; i < sortedFiles.length; i++) {
-      final fileRelPath = sortedFiles[i];
-      final content = fileContents[i];
-      buffer.writeln('--- File: $fileRelPath ---');
-      buffer.writeln(content);
-      buffer.writeln('--- End File ---');
-    }
+      for (int i = 0; i < sortedFiles.length; i++) {
+        final fileRelPath = sortedFiles[i];
+        final content = fileContents[i];
+        buffer.writeln('--- File: $fileRelPath ---');
+        buffer.writeln(content);
+        buffer.writeln('--- End File ---');
+      }
 
-    await Clipboard.setData(ClipboardData(text: buffer.toString()));
-    if (mounted) {
-      showSuccessSnackBar(context, 'Context copied to clipboard!');
+      await Clipboard.setData(ClipboardData(text: buffer.toString()));
+      if (mounted) {
+        showSuccessSnackBar(context, 'Context copied to clipboard!');
+      }
+    } catch (e) {
+      if (mounted) {
+        showErrorSnackBar(context, 'Failed to build clipboard contents: $e');
+      }
     }
   }
 
+  // Traverses trees to register and compile visible relative paths
   Set<String> _getVisibleFiles(TreeNode node) {
     final set = <String>{};
     void traverse(TreeNode n) {
@@ -146,6 +160,7 @@ class _GenerateButtonState extends ConsumerState<GenerateButton> {
     return set;
   }
 
+  // Builds structured text tree mapping outputs matching file inclusion lists
   void _buildTreeString(
     TreeNode node,
     StringBuffer buffer,

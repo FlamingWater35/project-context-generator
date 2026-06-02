@@ -10,6 +10,7 @@ import '../widgets/sidebar.dart';
 import '../widgets/snackbar.dart';
 import '../widgets/tree_view.dart';
 
+// Visual primary home screen containing sidebar controls and the project workspace tree view
 class HomeScreen extends ConsumerStatefulWidget {
   const HomeScreen({super.key});
 
@@ -26,18 +27,26 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     _loadSidebarWidth();
   }
 
+  // Restores saved workspace layout width parameters safely on widget initialization
   Future<void> _loadSidebarWidth() async {
-    final configService = ref.read(configServiceProvider);
-    final state = await configService.loadWindowState();
-    if (state != null && state['sidebarWidth'] != null) {
-      final width = (state['sidebarWidth'] as num).toDouble();
-      setState(() {
-        _sidebarWidth = width;
-      });
-      ref.read(sidebarWidthProvider.notifier).state = width;
+    try {
+      final configService = ref.read(configServiceProvider);
+      final state = await configService.loadWindowState();
+      if (state != null && state['sidebarWidth'] != null) {
+        final width = (state['sidebarWidth'] as num).toDouble();
+        if (mounted) {
+          setState(() {
+            _sidebarWidth = width;
+          });
+        }
+        ref.read(sidebarWidthProvider.notifier).state = width;
+      }
+    } catch (e) {
+      debugPrint('Unable to set saved custom layout dimensions: $e');
     }
   }
 
+  // Recovers altered local parameters, verifying disk updates directly
   Future<void> _handleCheckChanges(BuildContext context, WidgetRef ref) async {
     ref.invalidate(fileTreeProvider);
     try {
@@ -55,9 +64,10 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     }
   }
 
+  // Triggers OS native directory picking mechanisms with safety handlers
   Future<void> _handleSelectFolder(BuildContext context, WidgetRef ref) async {
     try {
-      String? selectedDirectory = await FilePicker.getDirectoryPath(
+      final String? selectedDirectory = await FilePicker.getDirectoryPath(
         dialogTitle: 'Select root folder',
       );
       if (selectedDirectory != null) {
@@ -72,6 +82,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     }
   }
 
+  // Assembles header details cards showing file state, target folder paths, and action controls
   Widget _buildHeader(
     BuildContext context,
     WidgetRef ref,
@@ -273,11 +284,11 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                         crossAxisAlignment: CrossAxisAlignment.stretch,
                         children: [
                           _buildHeader(context, ref, config),
-                          Expanded(
+                          const Expanded(
                             child: Material(
                               color: Colors.transparent,
                               clipBehavior: Clip.hardEdge,
-                              child: const ProjectTreeView(),
+                              child: ProjectTreeView(),
                             ),
                           ),
                         ],

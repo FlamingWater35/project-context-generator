@@ -4,12 +4,14 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models/tree_node.dart';
 import '../providers/app_state.dart';
 
+// Tree node widget representing a filesystem leaf or directories containing folder metadata
 class FileNodeWidget extends ConsumerWidget {
   const FileNodeWidget({super.key, required this.node, required this.depth});
 
   final int depth;
   final TreeNode node;
 
+  // Verifies if there are active inclusions down inside directories
   bool _hasIncludedChildren(TreeNode node, List<String> includedFiles) {
     if (!node.isDirectory) return includedFiles.contains(node.relativePath);
     for (final child in node.children) {
@@ -33,25 +35,29 @@ class FileNodeWidget extends ConsumerWidget {
         : isIncluded;
     final controller = ref.read(appStateControllerProvider);
 
-    String ignorePattern = node.isDirectory
+    final String ignorePattern = node.isDirectory
         ? '${node.relativePath}/**'
         : (() {
-            int firstDot = node.name.indexOf('.', 1);
+            final int firstDot = node.name.indexOf('.', 1);
             if (firstDot != -1) {
               return '*${node.name.substring(firstDot)}';
             }
             return node.relativePath;
           })();
 
-    String tooltip = node.isDirectory
+    final String tooltip = node.isDirectory
         ? 'Ignore directory'
         : 'Ignore all files with this extension ($ignorePattern)';
 
     return InkWell(
       borderRadius: BorderRadius.circular(4),
-      onTap: () => node.isDirectory
-          ? controller.toggleNodeExpanded(node.relativePath)
-          : controller.toggleFile(node.relativePath, !isIncluded),
+      onTap: () {
+        if (node.isDirectory) {
+          controller.toggleNodeExpanded(node.relativePath);
+        } else {
+          controller.toggleFile(node.relativePath, !isIncluded);
+        }
+      },
       hoverColor: Colors.white.withAlpha(13),
       splashColor: Colors.white.withAlpha(26),
       highlightColor: Colors.white.withAlpha(13),
@@ -81,8 +87,11 @@ class FileNodeWidget extends ConsumerWidget {
               Checkbox(
                 visualDensity: VisualDensity.compact,
                 value: isIncluded,
-                onChanged: (val) =>
-                    controller.toggleFile(node.relativePath, val ?? false),
+                onChanged: (val) {
+                  if (val != null) {
+                    controller.toggleFile(node.relativePath, val);
+                  }
+                },
               ),
 
             Icon(

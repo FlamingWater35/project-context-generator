@@ -10,9 +10,15 @@ import 'package:window_manager/window_manager.dart';
 import 'providers/app_state.dart';
 import 'screens/home_screen.dart';
 
+// Entry point initialization of global app layout, window sizes, and state providers
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  await windowManager.ensureInitialized();
+
+  try {
+    await windowManager.ensureInitialized();
+  } catch (e) {
+    debugPrint('Failed to initialize window manager: $e');
+  }
 
   Size windowSize = const Size(1000, 700);
   Offset? windowPosition;
@@ -27,43 +33,58 @@ void main() async {
       final state = jsonDecode(content) as Map<String, dynamic>;
 
       if (state['width'] != null && state['height'] != null) {
-        windowSize = Size(state['width'] as double, state['height'] as double);
+        windowSize = Size(
+          (state['width'] as num).toDouble(),
+          (state['height'] as num).toDouble(),
+        );
       }
       if (state['x'] != null && state['y'] != null) {
-        windowPosition = Offset(state['x'] as double, state['y'] as double);
+        windowPosition = Offset(
+          (state['x'] as num).toDouble(),
+          (state['y'] as num).toDouble(),
+        );
       }
       isMaximized = state['isMaximized'] as bool? ?? false;
       isFullScreen = state['isFullScreen'] as bool? ?? false;
     }
   } catch (e) {
-    debugPrint('Failed to load window state: $e');
+    debugPrint('Failed to load window state configuration: $e');
   }
 
-  WindowOptions windowOptions = WindowOptions(
+  final windowOptions = WindowOptions(
     title: 'Project Context Generator',
     size: windowSize,
     minimumSize: const Size(700, 500),
     center: windowPosition == null,
   );
 
-  await windowManager.setPreventClose(true);
+  try {
+    await windowManager.setPreventClose(true);
+  } catch (e) {
+    debugPrint('Failed to set window close prevention: $e');
+  }
 
   windowManager.waitUntilReadyToShow(windowOptions, () async {
-    if (windowPosition != null) {
-      await windowManager.setPosition(windowPosition);
+    try {
+      if (windowPosition != null) {
+        await windowManager.setPosition(windowPosition);
+      }
+      if (isMaximized) {
+        await windowManager.maximize();
+      } else if (isFullScreen) {
+        await windowManager.setFullScreen(true);
+      }
+      await windowManager.show();
+      await windowManager.focus();
+    } catch (e) {
+      debugPrint('Failed to configure or show the window container: $e');
     }
-    if (isMaximized) {
-      await windowManager.maximize();
-    } else if (isFullScreen) {
-      await windowManager.setFullScreen(true);
-    }
-    await windowManager.show();
-    await windowManager.focus();
   });
 
   runApp(const ProviderScope(child: ProjectContextGeneratorApp()));
 }
 
+// Global root container that manages window close listeners and theme parameters
 class ProjectContextGeneratorApp extends ConsumerStatefulWidget {
   const ProjectContextGeneratorApp({super.key});
 
@@ -92,13 +113,13 @@ class _ProjectContextGeneratorAppState
     try {
       await windowManager.hide();
     } catch (e) {
-      debugPrint('Failed to hide window: $e');
+      debugPrint('Failed to hide window frame during exit: $e');
     }
 
     try {
       ref.read(configsProvider.notifier).flush();
     } catch (e) {
-      debugPrint('Failed to flush configurations: $e');
+      debugPrint('Failed to save pending configurations before exit: $e');
     }
 
     try {
@@ -148,10 +169,14 @@ class _ProjectContextGeneratorAppState
         'sidebarWidth': sidebarWidth,
       });
     } catch (e) {
-      debugPrint('Failed to save window state during background exit: $e');
+      debugPrint('Failed to serialize and save window configurations: $e');
     }
 
-    await windowManager.destroy();
+    try {
+      await windowManager.destroy();
+    } catch (e) {
+      debugPrint('Failed to safely destroy native window context: $e');
+    }
   }
 
   @override

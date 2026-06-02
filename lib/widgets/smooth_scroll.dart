@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+// Scroll controller extending standard scroll inputs to enable smooth mouse wheel navigation curves
 class SmoothScrollController extends ScrollController {
   SmoothScrollController({
     super.initialScrollOffset,
@@ -24,6 +25,7 @@ class SmoothScrollController extends ScrollController {
   }
 }
 
+// Extends ScrollPositionWithSingleContext to intercept scroll inputs and animate pixel transformations smoothly
 class SmoothScrollPosition extends ScrollPositionWithSingleContext {
   SmoothScrollPosition({
     required super.physics,

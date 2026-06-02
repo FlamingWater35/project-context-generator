@@ -1,3 +1,4 @@
+// Immutable data structure representing a structural node in the filesystem tree
 class TreeNode {
   const TreeNode({
     required this.path,
@@ -15,6 +16,7 @@ class TreeNode {
   final String path;
   final String relativePath;
 
+  // Safely creates a cloned copy of the TreeNode with updated properties
   TreeNode copyWith({
     String? path,
     String? relativePath,

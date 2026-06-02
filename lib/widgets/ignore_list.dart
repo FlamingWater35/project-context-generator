@@ -7,6 +7,7 @@ import '../models/project_config.dart';
 import '../providers/app_state.dart';
 import 'smooth_scroll.dart';
 
+// Dialog enabling users to define and configure ignore rules using standard prebuilt chips
 class IgnoreListDialog extends ConsumerStatefulWidget {
   const IgnoreListDialog({super.key, required this.config});
 
@@ -55,6 +56,7 @@ class _IgnoreListDialogState extends ConsumerState<IgnoreListDialog> {
     ignores = List.from(widget.config.ignorePatterns);
   }
 
+  // Appends individual filter pattern lines into current runtime state views
   void _addIgnore(String val) {
     final trimmed = val.trim();
     if (trimmed.isNotEmpty && !ignores.contains(trimmed)) {
@@ -238,9 +240,13 @@ class _IgnoreListDialogState extends ConsumerState<IgnoreListDialog> {
         ),
         FilledButton(
           onPressed: () async {
-            await ref
-                .read(appStateControllerProvider)
-                .updateCurrentConfig(ignorePatterns: ignores);
+            try {
+              await ref
+                  .read(appStateControllerProvider)
+                  .updateCurrentConfig(ignorePatterns: ignores);
+            } catch (e) {
+              debugPrint('Error applying ignore options: $e');
+            }
             if (context.mounted) Navigator.pop(context);
           },
           child: const Text('Apply Changes'),
