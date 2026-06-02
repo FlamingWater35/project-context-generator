@@ -90,8 +90,23 @@ class _ProjectContextGeneratorAppState
   @override
   void onWindowClose() async {
     try {
-      final isMaximized = await windowManager.isMaximized();
-      final isFullScreen = await windowManager.isFullScreen();
+      await windowManager.hide();
+    } catch (e) {
+      debugPrint('Failed to hide window: $e');
+    }
+
+    try {
+      final metrics = await Future.wait([
+        windowManager.isMaximized(),
+        windowManager.isFullScreen(),
+        windowManager.getSize(),
+        windowManager.getPosition(),
+      ]);
+
+      final isMaximized = metrics[0] as bool;
+      final isFullScreen = metrics[1] as bool;
+      final size = metrics[2] as Size;
+      final pos = metrics[3] as Offset;
 
       double? width;
       double? height;
@@ -99,11 +114,8 @@ class _ProjectContextGeneratorAppState
       double? y;
 
       if (!isMaximized && !isFullScreen) {
-        final size = await windowManager.getSize();
         width = size.width;
         height = size.height;
-
-        final pos = await windowManager.getPosition();
         x = pos.dx;
         y = pos.dy;
       } else {
@@ -118,8 +130,8 @@ class _ProjectContextGeneratorAppState
       }
 
       final sidebarWidth = ref.read(sidebarWidthProvider);
-
       final configService = ref.read(configServiceProvider);
+
       await configService.saveWindowState({
         'width': width,
         'height': height,
@@ -130,7 +142,7 @@ class _ProjectContextGeneratorAppState
         'sidebarWidth': sidebarWidth,
       });
     } catch (e) {
-      debugPrint('Failed to save window state: $e');
+      debugPrint('Failed to save window state during background exit: $e');
     }
 
     await windowManager.destroy();
