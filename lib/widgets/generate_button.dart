@@ -144,19 +144,20 @@ class _GenerateButtonState extends ConsumerState<GenerateButton> {
     String prefix,
     Set<String> included,
   ) {
-    final children = node.children.where((child) {
-      if (!child.isDirectory) {
-        return included.contains(child.relativePath);
-      }
-      return _hasIncludedDescendant(child, included);
-    }).toList();
+    final children = node.children;
 
     for (int i = 0; i < children.length; i++) {
       final child = children[i];
       final isLast = i == children.length - 1;
       final connector = isLast ? '└── ' : '├── ';
+
+      final String selectionIndicator =
+          (!child.isDirectory && included.contains(child.relativePath))
+          ? ' [selected]'
+          : '';
+
       buffer.writeln(
-        '$prefix$connector${child.name}${child.isDirectory ? '/' : ''}',
+        '$prefix$connector${child.name}${child.isDirectory ? '/' : ''}$selectionIndicator',
       );
       if (child.isDirectory) {
         _buildTreeString(
@@ -167,18 +168,6 @@ class _GenerateButtonState extends ConsumerState<GenerateButton> {
         );
       }
     }
-  }
-
-  bool _hasIncludedDescendant(TreeNode node, Set<String> included) {
-    if (!node.isDirectory) return included.contains(node.relativePath);
-    for (final child in node.children) {
-      if (!child.isDirectory) {
-        if (included.contains(child.relativePath)) return true;
-      } else {
-        if (_hasIncludedDescendant(child, included)) return true;
-      }
-    }
-    return false;
   }
 
   @override
