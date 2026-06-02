@@ -13,6 +13,8 @@ import '../services/fs_service.dart';
 final configServiceProvider = Provider((ref) => ConfigService());
 final fsServiceProvider = Provider((ref) => FsService());
 
+final sidebarWidthProvider = StateProvider<double>((ref) => 250.0);
+
 final projectSnapshotsProvider = StateProvider<Map<String, Set<String>>>(
   (ref) => {},
 );

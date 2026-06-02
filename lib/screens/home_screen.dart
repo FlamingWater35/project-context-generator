@@ -20,6 +20,24 @@ class HomeScreen extends ConsumerStatefulWidget {
 class _HomeScreenState extends ConsumerState<HomeScreen> {
   double _sidebarWidth = 250.0;
 
+  @override
+  void initState() {
+    super.initState();
+    _loadSidebarWidth();
+  }
+
+  Future<void> _loadSidebarWidth() async {
+    final configService = ref.read(configServiceProvider);
+    final state = await configService.loadWindowState();
+    if (state != null && state['sidebarWidth'] != null) {
+      final width = (state['sidebarWidth'] as num).toDouble();
+      setState(() {
+        _sidebarWidth = width;
+      });
+      ref.read(sidebarWidthProvider.notifier).state = width;
+    }
+  }
+
   Future<void> _handleCheckChanges(BuildContext context, WidgetRef ref) async {
     ref.invalidate(fileTreeProvider);
     try {
@@ -229,6 +247,10 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                         maxSidebarWidth,
                       );
                     });
+                  },
+                  onHorizontalDragEnd: (_) {
+                    ref.read(sidebarWidthProvider.notifier).state =
+                        _sidebarWidth;
                   },
                   child: SizedBox(
                     width: 12,

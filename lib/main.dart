@@ -117,6 +117,8 @@ class _ProjectContextGeneratorAppState
         }
       }
 
+      final sidebarWidth = ref.read(sidebarWidthProvider);
+
       final configService = ref.read(configServiceProvider);
       await configService.saveWindowState({
         'width': width,
@@ -125,6 +127,7 @@ class _ProjectContextGeneratorAppState
         'y': y,
         'isMaximized': isMaximized,
         'isFullScreen': isFullScreen,
+        'sidebarWidth': sidebarWidth,
       });
     } catch (e) {
       debugPrint('Failed to save window state: $e');
