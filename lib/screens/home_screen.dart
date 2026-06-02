@@ -82,9 +82,20 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                         overflow: TextOverflow.ellipsis,
                         maxLines: 1,
                       ),
-                      const SizedBox(height: 12),
+                      const SizedBox(height: 4),
+                      Text(
+                        config.rootPath.isEmpty
+                            ? 'No root folder selected'
+                            : config.rootPath,
+                        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                          color: Theme.of(context).colorScheme.onSurfaceVariant,
+                        ),
+                        overflow: TextOverflow.ellipsis,
+                        maxLines: 2,
+                      ),
+                      const SizedBox(height: 16),
                       Wrap(
-                        spacing: 12,
+                        spacing: 8,
                         runSpacing: 8,
                         children: [
                           ElevatedButton.icon(
@@ -99,56 +110,6 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                             },
                           ),
                           const GenerateButton(),
-                        ],
-                      ),
-                    ],
-                  )
-                else
-                  Row(
-                    children: [
-                      Expanded(
-                        child: Text(
-                          config.name,
-                          style: Theme.of(context).textTheme.headlineSmall,
-                          overflow: TextOverflow.ellipsis,
-                          maxLines: 1,
-                        ),
-                      ),
-                      const SizedBox(width: 16),
-                      ElevatedButton.icon(
-                        icon: const Icon(Icons.settings),
-                        label: const Text('Ignores'),
-                        onPressed: () {
-                          showDialog(
-                            context: context,
-                            builder: (_) => IgnoreListDialog(config: config),
-                          );
-                        },
-                      ),
-                      const SizedBox(width: 12),
-                      const GenerateButton(),
-                    ],
-                  ),
-                const SizedBox(height: 16),
-                if (isNarrow)
-                  Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        config.rootPath.isEmpty
-                            ? 'No root folder selected'
-                            : config.rootPath,
-                        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                          color: Theme.of(context).colorScheme.onSurfaceVariant,
-                        ),
-                        overflow: TextOverflow.ellipsis,
-                        maxLines: 2,
-                      ),
-                      const SizedBox(height: 12),
-                      Wrap(
-                        spacing: 8,
-                        runSpacing: 8,
-                        children: [
                           ElevatedButton.icon(
                             icon: const Icon(Icons.refresh, size: 18),
                             label: const Text('Check for Changes'),
@@ -163,33 +124,65 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                     ],
                   )
                 else
-                  Row(
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Expanded(
-                        child: Text(
-                          config.rootPath.isEmpty
-                              ? 'No root folder selected'
-                              : config.rootPath,
-                          style: Theme.of(context).textTheme.bodyMedium
-                              ?.copyWith(
-                                color: Theme.of(
-                                  context,
-                                ).colorScheme.onSurfaceVariant,
-                              ),
-                          overflow: TextOverflow.ellipsis,
-                          maxLines: 2,
-                        ),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: Text(
+                              config.name,
+                              style: Theme.of(context).textTheme.headlineSmall,
+                              overflow: TextOverflow.ellipsis,
+                              maxLines: 1,
+                            ),
+                          ),
+                          const SizedBox(width: 16),
+                          ElevatedButton.icon(
+                            icon: const Icon(Icons.settings),
+                            label: const Text('Ignores'),
+                            onPressed: () {
+                              showDialog(
+                                context: context,
+                                builder: (_) =>
+                                    IgnoreListDialog(config: config),
+                              );
+                            },
+                          ),
+                          const SizedBox(width: 12),
+                          const GenerateButton(),
+                        ],
                       ),
-                      const SizedBox(width: 16),
-                      ElevatedButton.icon(
-                        icon: const Icon(Icons.refresh, size: 18),
-                        label: const Text('Check for Changes'),
-                        onPressed: () => _handleCheckChanges(context, ref),
-                      ),
-                      const SizedBox(width: 8),
-                      ElevatedButton(
-                        onPressed: () => _handleSelectFolder(context, ref),
-                        child: const Text('Select Root Folder'),
+                      const SizedBox(height: 16),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: Text(
+                              config.rootPath.isEmpty
+                                  ? 'No root folder selected'
+                                  : config.rootPath,
+                              style: Theme.of(context).textTheme.bodyMedium
+                                  ?.copyWith(
+                                    color: Theme.of(
+                                      context,
+                                    ).colorScheme.onSurfaceVariant,
+                                  ),
+                              overflow: TextOverflow.ellipsis,
+                              maxLines: 2,
+                            ),
+                          ),
+                          const SizedBox(width: 16),
+                          ElevatedButton.icon(
+                            icon: const Icon(Icons.refresh, size: 18),
+                            label: const Text('Check for Changes'),
+                            onPressed: () => _handleCheckChanges(context, ref),
+                          ),
+                          const SizedBox(width: 8),
+                          ElevatedButton(
+                            onPressed: () => _handleSelectFolder(context, ref),
+                            child: const Text('Select Root Folder'),
+                          ),
+                        ],
                       ),
                     ],
                   ),
@@ -209,8 +202,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
       body: LayoutBuilder(
         builder: (context, constraints) {
           final totalWidth = constraints.maxWidth;
-          const minSidebarWidth = 220.0;
-          const minMainWidth = 500.0;
+          const minSidebarWidth = 200.0;
+          const minMainWidth = 450.0;
 
           double maxSidebarWidth = totalWidth - minMainWidth;
           if (maxSidebarWidth < minSidebarWidth) {

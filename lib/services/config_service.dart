@@ -15,7 +15,8 @@ class ConfigService {
     await for (final entity in configDir.list()) {
       if (entity is File &&
           entity.path.endsWith('.json') &&
-          !entity.path.endsWith('.snap.json')) {
+          !entity.path.endsWith('.snap.json') &&
+          !entity.path.endsWith('window_state.json')) {
         try {
           final content = await entity.readAsString();
           final json = jsonDecode(content);
@@ -115,6 +116,30 @@ class ConfigService {
       }
     } catch (e) {
       debugPrint('Failed to delete snapshot: $e');
+    }
+  }
+
+  Future<Map<String, dynamic>?> loadWindowState() async {
+    try {
+      final configDir = await _getConfigDir();
+      final file = File(p.join(configDir.path, 'window_state.json'));
+      if (!await file.exists()) return null;
+
+      final content = await file.readAsString();
+      return jsonDecode(content) as Map<String, dynamic>;
+    } catch (e) {
+      return null;
+    }
+  }
+
+  Future<void> saveWindowState(Map<String, dynamic> state) async {
+    try {
+      final configDir = await _getConfigDir();
+      final file = File(p.join(configDir.path, 'window_state.json'));
+      final content = jsonEncode(state);
+      await file.writeAsString(content);
+    } catch (e) {
+      debugPrint('Failed to save window state: $e');
     }
   }
 
