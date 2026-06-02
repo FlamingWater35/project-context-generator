@@ -34,6 +34,8 @@ class ConfigsNotifier extends StateNotifier<List<ProjectConfig>> {
   final ConfigService _configService;
   final Ref _ref;
   Timer? _saveTimer;
+  ProjectConfig? _pendingConfig;
+  String? _pendingOldName;
 
   Future<void> addConfig(String name) async {
     final newConfig = ProjectConfig(id: const Uuid().v4(), name: name);
@@ -47,13 +49,35 @@ class ConfigsNotifier extends StateNotifier<List<ProjectConfig>> {
         if (c.id == config.id) config else c,
     ];
 
+    _pendingConfig = config;
+    _pendingOldName = oldName;
+
     _saveTimer?.cancel();
     _saveTimer = Timer(const Duration(milliseconds: 300), () {
-      _configService.saveConfig(config, oldName: oldName);
+      _savePending();
     });
   }
 
+  void _savePending() {
+    if (_pendingConfig != null) {
+      _configService.saveConfig(_pendingConfig!, oldName: _pendingOldName);
+      _pendingConfig = null;
+      _pendingOldName = null;
+    }
+    _saveTimer?.cancel();
+    _saveTimer = null;
+  }
+
+  void flush() {
+    _savePending();
+  }
+
   Future<void> deleteConfig(ProjectConfig config) async {
+    if (_pendingConfig?.id == config.id) {
+      _pendingConfig = null;
+      _pendingOldName = null;
+      _saveTimer?.cancel();
+    }
     await _configService.deleteConfig(config);
     state = state.where((c) => c.id != config.id).toList();
 

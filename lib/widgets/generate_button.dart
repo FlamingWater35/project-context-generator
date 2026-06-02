@@ -108,9 +108,17 @@ class _GenerateButtonState extends ConsumerState<GenerateButton> {
     buffer.writeln('--- MAIN FILE(S) CONTENT ---');
 
     final sortedFiles = effectiveIncluded.toList()..sort();
-    for (final fileRelPath in sortedFiles) {
-      final absolutePath = p.join(config.rootPath, fileRelPath);
-      final content = await fsService.readFile(absolutePath);
+
+    final List<String> fileContents = await Future.wait(
+      sortedFiles.map((fileRelPath) {
+        final absolutePath = p.join(config.rootPath, fileRelPath);
+        return fsService.readFile(absolutePath);
+      }),
+    );
+
+    for (int i = 0; i < sortedFiles.length; i++) {
+      final fileRelPath = sortedFiles[i];
+      final content = fileContents[i];
       buffer.writeln('--- File: $fileRelPath ---');
       buffer.writeln(content);
       buffer.writeln('--- End File ---');

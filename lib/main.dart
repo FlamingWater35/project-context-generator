@@ -96,6 +96,12 @@ class _ProjectContextGeneratorAppState
     }
 
     try {
+      ref.read(configsProvider.notifier).flush();
+    } catch (e) {
+      debugPrint('Failed to flush configurations: $e');
+    }
+
+    try {
       final metrics = await Future.wait([
         windowManager.isMaximized(),
         windowManager.isFullScreen(),

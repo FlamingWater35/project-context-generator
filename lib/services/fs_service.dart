@@ -57,14 +57,14 @@ class _IgnoreRule {
     Glob? pruneGlob;
 
     if (!isRootAnchored && !hasInternalSlash) {
-      if (!onlyDirs) rootGlob = Glob(pStr);
-      if (!onlyDirs) nestedGlob = Glob('**/$pStr');
-      dirGlob = Glob('**/$pStr/**');
-      if (pruneP.isNotEmpty) pruneGlob = Glob('**/$pruneP');
+      if (!onlyDirs) rootGlob = Glob(pStr, context: p.posix);
+      if (!onlyDirs) nestedGlob = Glob('**/$pStr', context: p.posix);
+      dirGlob = Glob('**/$pStr/**', context: p.posix);
+      if (pruneP.isNotEmpty) pruneGlob = Glob('**/$pruneP', context: p.posix);
     } else {
-      if (!onlyDirs) rootGlob = Glob(pStr);
-      dirGlob = Glob('$pStr/**');
-      if (pruneP.isNotEmpty) pruneGlob = Glob(pruneP);
+      if (!onlyDirs) rootGlob = Glob(pStr, context: p.posix);
+      dirGlob = Glob('$pStr/**', context: p.posix);
+      if (pruneP.isNotEmpty) pruneGlob = Glob(pruneP, context: p.posix);
     }
 
     return _IgnoreRule._(rootGlob, nestedGlob, dirGlob, pruneGlob);
@@ -94,6 +94,13 @@ class _IgnoreRule {
 
 class FsService {
   static const int _maxFileSizeBytes = 1024 * 1024;
+
+  static String _normalizeDriveLetter(String path) {
+    if (Platform.isWindows && path.length >= 2 && path[1] == ':') {
+      return path[0].toUpperCase() + path.substring(1);
+    }
+    return path;
+  }
 
   Future<Set<String>> scanPaths(
     String rootPath,
@@ -166,10 +173,10 @@ class FsService {
     String canonicalRoot;
     Directory canonicalDir;
     try {
-      canonicalRoot = dir.resolveSymbolicLinksSync();
+      canonicalRoot = _normalizeDriveLetter(dir.resolveSymbolicLinksSync());
       canonicalDir = Directory(canonicalRoot);
     } catch (e) {
-      canonicalRoot = rootPath;
+      canonicalRoot = _normalizeDriveLetter(rootPath);
       canonicalDir = dir;
     }
 
@@ -178,8 +185,9 @@ class FsService {
         final entities = currentDir.listSync(followLinks: false);
         for (final entity in entities) {
           try {
+            final normalizedEntityPath = _normalizeDriveLetter(entity.path);
             final relPath = p
-                .relative(entity.path, from: canonicalRoot)
+                .relative(normalizedEntityPath, from: canonicalRoot)
                 .replaceAll('\\', '/');
             final isDir = entity is Directory;
 
@@ -229,10 +237,10 @@ class FsService {
     String canonicalRoot;
     Directory canonicalDir;
     try {
-      canonicalRoot = dir.resolveSymbolicLinksSync();
+      canonicalRoot = _normalizeDriveLetter(dir.resolveSymbolicLinksSync());
       canonicalDir = Directory(canonicalRoot);
     } catch (e) {
-      canonicalRoot = rootPath;
+      canonicalRoot = _normalizeDriveLetter(rootPath);
       canonicalDir = dir;
     }
 
@@ -262,11 +270,12 @@ class FsService {
       bool anyChildIsNew = false;
 
       try {
-        final entities = dir.listSync();
+        final entities = dir.listSync(followLinks: false);
         for (final entity in entities) {
           try {
+            final normalizedEntityPath = _normalizeDriveLetter(entity.path);
             final relPath = p
-                .relative(entity.path, from: canonicalRoot)
+                .relative(normalizedEntityPath, from: canonicalRoot)
                 .replaceAll('\\', '/');
             final isDir = entity is Directory;
 
