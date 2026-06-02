@@ -11,11 +11,11 @@ class FileNodeWidget extends ConsumerWidget {
   final int depth;
   final TreeNode node;
 
-  // Verifies if there are active inclusions down inside directories
-  bool _hasIncludedChildren(TreeNode node, List<String> includedFiles) {
-    if (!node.isDirectory) return includedFiles.contains(node.relativePath);
+  // Verifies recursively if any nested child is checked utilizing O(1) Set lookups
+  bool _hasIncludedChildren(TreeNode node, Set<String> includedSet) {
+    if (!node.isDirectory) return includedSet.contains(node.relativePath);
     for (final child in node.children) {
-      if (_hasIncludedChildren(child, includedFiles)) return true;
+      if (_hasIncludedChildren(child, includedSet)) return true;
     }
     return false;
   }
@@ -28,10 +28,12 @@ class FileNodeWidget extends ConsumerWidget {
     final expansionState = ref.watch(expansionStateProvider);
     final isExpanded = expansionState[node.relativePath] ?? false;
 
+    // Utilize the O(1) optimized Set provider rather than iterative List lookups
+    final includedSet = ref.watch(selectedIncludedFilesSetProvider);
     final isIncluded =
-        !node.isDirectory && config.includedFiles.contains(node.relativePath);
+        !node.isDirectory && includedSet.contains(node.relativePath);
     final hasIncluded = node.isDirectory
-        ? _hasIncludedChildren(node, config.includedFiles)
+        ? _hasIncludedChildren(node, includedSet)
         : isIncluded;
     final controller = ref.read(appStateControllerProvider);
 

@@ -151,6 +151,13 @@ final selectedConfigProvider = Provider<ProjectConfig?>((ref) {
   return configs.first;
 });
 
+// Caches and exposes checked paths as a Set to allow O(1) lookups during recursive rendering
+final selectedIncludedFilesSetProvider = Provider<Set<String>>((ref) {
+  final config = ref.watch(selectedConfigProvider);
+  if (config == null) return const <String>{};
+  return config.includedFiles.toSet();
+});
+
 // Private helper to capture identical properties and compare changes across scans
 class _TreeConfig {
   const _TreeConfig(this.configId, this.rootPath, this.ignorePatterns);

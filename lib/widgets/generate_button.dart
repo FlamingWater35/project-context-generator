@@ -18,7 +18,7 @@ class GenerateButton extends ConsumerStatefulWidget {
 class _GenerateButtonState extends ConsumerState<GenerateButton> {
   bool _isLoading = false;
 
-  // Verifies disk configurations and processes text extraction
+  // Verifies disk configurations and processes text extraction with user decision options
   Future<void> _handleGenerate() async {
     setState(() => _isLoading = true);
 
@@ -41,30 +41,36 @@ class _GenerateButtonState extends ConsumerState<GenerateButton> {
 
       if (hasChanged) {
         if (mounted) {
-          final bool? shouldRegenerate = await showDialog<bool>(
+          // Three-option action flow allowing stale copies if preferred
+          final String? actionChoice = await showDialog<String>(
             context: context,
             builder: (context) => AlertDialog(
               title: const Text('Project State Changed'),
               content: const Text(
-                'The physical files on disk have changed since the last check. Would you like to refresh the project state and then generate the prompt?',
+                'The physical files on disk have changed since the last check. Would you like to refresh your project snapshot or generate using the existing configuration?',
               ),
               actions: [
                 TextButton(
-                  onPressed: () => Navigator.pop(context, false),
+                  onPressed: () => Navigator.pop(context, 'cancel'),
                   child: const Text('Cancel'),
                 ),
+                TextButton(
+                  onPressed: () => Navigator.pop(context, 'copy_anyway'),
+                  child: const Text('Copy Anyway'),
+                ),
                 FilledButton(
-                  onPressed: () => Navigator.pop(context, true),
-                  child: const Text('Refresh & Generate'),
+                  onPressed: () => Navigator.pop(context, 'refresh'),
+                  child: const Text('Refresh & Copy'),
                 ),
               ],
             ),
           );
 
-          if (shouldRegenerate == true) {
+          if (actionChoice == 'refresh') {
             await ref.read(appStateControllerProvider).acknowledgeChanges();
             ref.invalidate(fileTreeProvider);
-
+            if (mounted) await _performCopy();
+          } else if (actionChoice == 'copy_anyway') {
             if (mounted) await _performCopy();
           }
         }
