@@ -14,40 +14,40 @@ import '../services/fs_service.dart';
 /// Available sorting modes for organizing project configurations in the sidebar.
 enum ProjectSortOption { nameAsc, nameDesc, dateNewest, dateOldest }
 
-// Provider pointing to the configuration database service helper
+/// Provider pointing to the configuration database service helper.
 final configServiceProvider = Provider((ref) => ConfigService());
 
-// Provider pointing to the multi-isolate file parsing utility
+/// Provider pointing to the multi-isolate file parsing utility.
 final fsServiceProvider = Provider((ref) => FsService());
 
-// Global state controller for tracking user adjustments to the sidebar layout
+/// Global state controller for tracking user adjustments to the sidebar layout.
 final sidebarWidthProvider = StateProvider<double>((ref) => 250.0);
 
-// State provider tracking the active project sorting option
+/// State provider tracking the active project sorting option.
 final projectSortOptionProvider = StateProvider<ProjectSortOption>(
   (ref) => ProjectSortOption.nameAsc,
 );
 
-/// Tracks node paths currently highlighted/selected via multi-select gestures or button toggles
+/// Tracks node paths currently highlighted/selected via multi-select gestures or button toggles.
 final selectedNodePathsProvider = StateProvider<Set<String>>((ref) => const {});
 
-// Tracks identified disk snapshots per project ID to locate structural updates
+/// Tracks identified disk snapshots per project ID to locate structural updates.
 final projectSnapshotsProvider = StateProvider<Map<String, Set<String>>>(
   (ref) => const {},
 );
 
-// Manages expansion triggers of nodes within the dynamic directory viewer
+/// Manages expansion triggers of nodes within the dynamic directory viewer.
 final expansionStateProvider = StateProvider<Map<String, bool>>(
   (ref) => const {},
 );
 
-// Application-wide listener monitoring and handling changes to project options
+/// Application-wide listener monitoring and handling changes to project options.
 final configsProvider =
     StateNotifierProvider<ConfigsNotifier, List<ProjectConfig>>((ref) {
       return ConfigsNotifier(ref, ref.watch(configServiceProvider));
     });
 
-// State notifier orchestrating background actions on system configurations
+/// State notifier orchestrating background actions on system configurations.
 class ConfigsNotifier extends StateNotifier<List<ProjectConfig>> {
   ConfigsNotifier(this._ref, this._configService) : super(const []) {
     _load();
@@ -59,7 +59,7 @@ class ConfigsNotifier extends StateNotifier<List<ProjectConfig>> {
   String? _pendingOldName;
   Timer? _saveTimer;
 
-  // Stores and appends a fresh project record directly into persistent storage
+  /// Stores and appends a fresh project record directly into persistent storage.
   Future<void> addConfig(String name) async {
     try {
       final newConfig = ProjectConfig(id: const Uuid().v4(), name: name);
@@ -68,11 +68,11 @@ class ConfigsNotifier extends StateNotifier<List<ProjectConfig>> {
 
       _ref.read(appStateControllerProvider).selectConfig(newConfig.id);
     } catch (e) {
-      debugPrint('Error caught while creating new config configuration: $e');
+      debugPrint('Error creating new config configuration: $e');
     }
   }
 
-  // Defers and serializes target state parameters in intervals using a debounce window
+  /// Defers and serializes target state parameters in intervals using a debounce window.
   void updateConfig(ProjectConfig config, {String? oldName}) {
     state = [
       for (final c in state)
@@ -88,7 +88,7 @@ class ConfigsNotifier extends StateNotifier<List<ProjectConfig>> {
     });
   }
 
-  // Executes actual synchronous file writes for any configurations queued via the debounce window
+  /// Executes actual synchronous file writes for any configurations queued via the debounce window.
   void _savePending() {
     if (_pendingConfig != null) {
       try {
@@ -103,12 +103,12 @@ class ConfigsNotifier extends StateNotifier<List<ProjectConfig>> {
     _saveTimer = null;
   }
 
-  // Instantly commits and saves queued configurations on application shutdown
+  /// Instantly commits and saves queued configurations on application shutdown.
   void flush() {
     _savePending();
   }
 
-  // Removes a configuration metadata record and cleans associated disk assets
+  /// Removes a configuration metadata record and cleans associated disk assets.
   Future<void> deleteConfig(ProjectConfig config) async {
     try {
       if (_pendingConfig?.id == config.id) {
@@ -134,7 +134,7 @@ class ConfigsNotifier extends StateNotifier<List<ProjectConfig>> {
     }
   }
 
-  // Asynchronously loads all previously stored project configs and restores the last opened project
+  /// Asynchronously loads all previously stored project configs and restores the last opened project.
   Future<void> _load() async {
     try {
       state = await _configService.loadConfigs();
@@ -166,26 +166,20 @@ class ConfigsNotifier extends StateNotifier<List<ProjectConfig>> {
   }
 }
 
-// State tracker focusing exclusively on the active config database selection identifier
+/// State tracker focusing exclusively on the active config database selection identifier.
 final selectedConfigIdProvider = StateProvider<String?>((ref) => null);
 
-// Exposes details regarding the currently highlighted active configuration structure
+/// Exposes details regarding the currently highlighted active configuration structure cleanly without side-effects.
 final selectedConfigProvider = Provider<ProjectConfig?>((ref) {
   final configs = ref.watch(configsProvider);
   final selectedId = ref.watch(selectedConfigIdProvider);
   if (configs.isEmpty) return null;
 
   final config = configs.where((c) => c.id == selectedId).firstOrNull;
-  if (config != null) return config;
-
-  Future.microtask(() {
-    ref.read(selectedConfigIdProvider.notifier).state = configs.first.id;
-  });
-
-  return configs.first;
+  return config ?? configs.first;
 });
 
-/// Asynchronously scans project root to discover agent skills in the codebase
+/// Asynchronously scans project root to discover agent skills in the codebase.
 final detectedSkillsProvider = FutureProvider<List<AgentSkill>>((ref) async {
   final config = ref.watch(selectedConfigProvider);
   if (config == null || config.rootPath.isEmpty) return const [];
@@ -194,7 +188,7 @@ final detectedSkillsProvider = FutureProvider<List<AgentSkill>>((ref) async {
   return await fs.detectSkills(config.rootPath);
 });
 
-/// Exposes the unified collection of detected and custom skills for the current project
+/// Exposes the unified collection of detected and custom skills for the current project.
 final allProjectSkillsProvider = Provider<List<AgentSkill>>((ref) {
   final config = ref.watch(selectedConfigProvider);
   if (config == null) return const [];
@@ -212,14 +206,14 @@ final allProjectSkillsProvider = Provider<List<AgentSkill>>((ref) {
   return map.values.toList();
 });
 
-// Caches and exposes checked paths as a Set to allow O(1) lookups during recursive rendering
+/// Caches and exposes checked paths as a Set to allow O(1) lookups during recursive rendering.
 final selectedIncludedFilesSetProvider = Provider<Set<String>>((ref) {
   final config = ref.watch(selectedConfigProvider);
   if (config == null) return const <String>{};
   return config.includedFiles.toSet();
 });
 
-// Private helper to capture identical properties and compare changes across scans
+/// Private helper to capture identical properties and compare changes across scans.
 class _TreeConfig {
   const _TreeConfig(this.configId, this.rootPath, this.ignorePatterns);
 
@@ -240,14 +234,14 @@ class _TreeConfig {
       Object.hash(configId, rootPath, Object.hashAll(ignorePatterns));
 }
 
-// Evaluates active directory roots and ignore settings configuration matches
+/// Evaluates active directory roots and ignore settings configuration matches.
 final treeConfigProvider = Provider<_TreeConfig?>((ref) {
   final config = ref.watch(selectedConfigProvider);
   if (config == null || config.rootPath.isEmpty) return null;
   return _TreeConfig(config.id, config.rootPath, config.ignorePatterns);
 });
 
-// Emits loaded background directories mapped and structured dynamically as UI node trees
+/// Emits loaded background directories mapped and structured dynamically as UI node trees.
 final fileTreeProvider = FutureProvider<TreeNode?>((ref) async {
   bool mounted = true;
   ref.onDispose(() => mounted = false);
@@ -299,12 +293,12 @@ final fileTreeProvider = FutureProvider<TreeNode?>((ref) async {
       knownPaths: knownPaths,
     );
   } catch (e) {
-    debugPrint('Critical file parsing scan exception captured: $e');
+    debugPrint('File parsing scan exception captured: $e');
     return null;
   }
 });
 
-/// Computes prompt statistics (tokens, lines, file count, size) in background isolate for live display in bottom status bar
+/// Computes prompt statistics in background isolate for live display in bottom status bar.
 final promptStatsProvider = FutureProvider<PromptBuildResult?>((ref) async {
   final config = ref.watch(selectedConfigProvider);
   if (config == null || config.rootPath.isEmpty) return null;
@@ -328,16 +322,44 @@ final promptStatsProvider = FutureProvider<PromptBuildResult?>((ref) async {
   return await fsService.buildPromptContext(params);
 });
 
-// App-wide provider containing high-level directory structural modifiers
+/// App-wide provider containing high-level directory structural modifiers.
 final appStateControllerProvider = Provider((ref) => AppStateController(ref));
 
-// Direct logic layer triggering disk state adjustments and directory manipulation actions
+/// Direct logic layer triggering disk state adjustments and directory manipulation actions.
 class AppStateController {
   const AppStateController(this._ref);
 
   final Ref _ref;
 
-  // Handles sidebar target config selection changes and persists the selected project ID
+  /// Recursively resolves input paths (files or directories) into individual relative file paths.
+  List<String> _expandPathsToFiles(Iterable<String> paths) {
+    final treeNode = _ref.read(fileTreeProvider).value;
+    if (treeNode == null) return paths.toList();
+
+    final Set<String> resultFiles = {};
+
+    TreeNode? findNode(TreeNode current, String relPath) {
+      if (current.relativePath == relPath) return current;
+      for (final child in current.children) {
+        final found = findNode(child, relPath);
+        if (found != null) return found;
+      }
+      return null;
+    }
+
+    for (final path in paths) {
+      final node = findNode(treeNode, path);
+      if (node != null) {
+        resultFiles.addAll(node.getAllFilePaths());
+      } else {
+        resultFiles.add(path);
+      }
+    }
+
+    return resultFiles.toList();
+  }
+
+  /// Handles sidebar target config selection changes and persists the selected project ID.
   void selectConfig(String? id) {
     _ref.read(selectedConfigIdProvider.notifier).state = id;
     _ref.read(expansionStateProvider.notifier).state = const {};
@@ -348,13 +370,13 @@ class AppStateController {
     }
   }
 
-  // Updates and persists the current project list sorting option
+  /// Updates and persists the current project list sorting option.
   void setSortOption(ProjectSortOption option) {
     _ref.read(projectSortOptionProvider.notifier).state = option;
     _saveSortOption(option);
   }
 
-  // Accepts and overrides directory metadata indicators to mark newly identified assets as loaded
+  /// Accepts and overrides directory metadata indicators to mark newly identified assets as loaded.
   Future<void> acknowledgeChanges() async {
     try {
       final config = _ref.read(selectedConfigProvider);
@@ -386,7 +408,7 @@ class AppStateController {
     }
   }
 
-  // Directly amends and commits alterations to physical attributes on the selected context
+  /// Directly amends and commits alterations to physical attributes on the selected context.
   Future<void> updateCurrentConfig({
     String? name,
     String? rootPath,
@@ -424,31 +446,33 @@ class AppStateController {
     }
   }
 
-  /// Checks (includes) multiple file relative paths at once
-  Future<void> checkFiles(Iterable<String> filePaths) async {
+  /// Includes multiple file or directory relative paths at once, expanding directory paths recursively.
+  Future<void> checkFiles(Iterable<String> paths) async {
     try {
       final current = _ref.read(selectedConfigProvider);
       if (current == null) return;
-      final set = current.includedFiles.toSet()..addAll(filePaths);
+      final expandedFilePaths = _expandPathsToFiles(paths);
+      final set = current.includedFiles.toSet()..addAll(expandedFilePaths);
       await updateCurrentConfig(includedFiles: set.toList());
     } catch (e) {
       debugPrint('Failed to check files: $e');
     }
   }
 
-  /// Unchecks (excludes) multiple file relative paths at once
-  Future<void> uncheckFiles(Iterable<String> filePaths) async {
+  /// Unchecks multiple file or directory relative paths at once.
+  Future<void> uncheckFiles(Iterable<String> paths) async {
     try {
       final current = _ref.read(selectedConfigProvider);
       if (current == null) return;
-      final set = current.includedFiles.toSet()..removeAll(filePaths);
+      final expandedFilePaths = _expandPathsToFiles(paths);
+      final set = current.includedFiles.toSet()..removeAll(expandedFilePaths);
       await updateCurrentConfig(includedFiles: set.toList());
     } catch (e) {
       debugPrint('Failed to uncheck files: $e');
     }
   }
 
-  // Toggles inclusion of a target agent skill for context prompt generation
+  /// Toggles inclusion of a target agent skill for context prompt generation.
   Future<void> toggleSkillSelection(String skillId) async {
     try {
       final current = _ref.read(selectedConfigProvider);
@@ -465,7 +489,7 @@ class AppStateController {
     }
   }
 
-  // Selects all available skills for context prompt inclusion
+  /// Selects all available skills for context prompt inclusion.
   Future<void> selectAllSkills(List<String> skillIds) async {
     try {
       await updateCurrentConfig(selectedSkillIds: skillIds);
@@ -474,7 +498,7 @@ class AppStateController {
     }
   }
 
-  // Deselects all skills for context prompt inclusion
+  /// Deselects all skills for context prompt inclusion.
   Future<void> deselectAllSkills() async {
     try {
       await updateCurrentConfig(selectedSkillIds: const []);
@@ -483,7 +507,7 @@ class AppStateController {
     }
   }
 
-  // Appends a custom user-created skill to the active project configuration
+  /// Appends a custom user-created skill to the active project configuration.
   Future<void> addCustomSkill(AgentSkill skill) async {
     try {
       final current = _ref.read(selectedConfigProvider);
@@ -499,7 +523,7 @@ class AppStateController {
     }
   }
 
-  // Removes a custom user-created skill from the active project configuration
+  /// Removes a custom user-created skill from the active project configuration.
   Future<void> deleteCustomSkill(String skillId) async {
     try {
       final current = _ref.read(selectedConfigProvider);
@@ -519,7 +543,7 @@ class AppStateController {
     }
   }
 
-  // Adds or removes specific paths to the persistent selection configuration
+  /// Adds or removes specific paths to the persistent selection configuration.
   Future<void> toggleFile(String path, bool isIncluded) async {
     try {
       final current = _ref.read(selectedConfigProvider);
@@ -536,10 +560,10 @@ class AppStateController {
     }
   }
 
-  // Includes all target nodes belonging underneath a highlighted parent tree node
+  /// Includes all target nodes belonging underneath a highlighted parent tree node.
   Future<void> selectAll(TreeNode dirNode) async {
     try {
-      final files = _ref.read(fsServiceProvider).getRecursiveFiles(dirNode);
+      final files = dirNode.getAllFilePaths();
       final current = _ref.read(selectedConfigProvider);
       if (current == null) return;
       final set = current.includedFiles.toSet()..addAll(files);
@@ -549,13 +573,10 @@ class AppStateController {
     }
   }
 
-  // Purges all listed children nodes of a target folder node from selections
+  /// Purges all listed children nodes of a target folder node from selections.
   Future<void> selectNone(TreeNode dirNode) async {
     try {
-      final files = _ref
-          .read(fsServiceProvider)
-          .getRecursiveFiles(dirNode)
-          .toSet();
+      final files = dirNode.getAllFilePaths().toSet();
       final current = _ref.read(selectedConfigProvider);
       if (current == null) return;
       final set = current.includedFiles.toSet()..removeAll(files);
@@ -565,10 +586,10 @@ class AppStateController {
     }
   }
 
-  // Flips file selection states across target children nested inside a folder node
+  /// Flips file selection states across target children nested inside a folder node.
   Future<void> invertSelection(TreeNode dirNode) async {
     try {
-      final files = _ref.read(fsServiceProvider).getRecursiveFiles(dirNode);
+      final files = dirNode.getAllFilePaths();
       final current = _ref.read(selectedConfigProvider);
       if (current == null) return;
       final set = current.includedFiles.toSet();
@@ -585,7 +606,7 @@ class AppStateController {
     }
   }
 
-  // Adds a global pattern definition to exclude matching paths
+  /// Adds a global pattern definition to exclude matching paths.
   Future<void> addIgnorePattern(String pattern) async {
     try {
       final current = _ref.read(selectedConfigProvider);
@@ -598,19 +619,45 @@ class AppStateController {
     }
   }
 
-  /// Appends multiple ignore rules to the configuration
-  Future<void> addIgnorePatterns(List<String> patterns) async {
+  /// Appends multiple ignore rules to the configuration, automatically formatting directory paths.
+  Future<void> addIgnorePatterns(List<String> paths) async {
     try {
       final current = _ref.read(selectedConfigProvider);
       if (current == null) return;
-      final set = current.ignorePatterns.toSet()..addAll(patterns);
+      final treeNode = _ref.read(fileTreeProvider).value;
+
+      final Set<String> formattedPatterns = {};
+      for (final p in paths) {
+        bool isDir = false;
+        if (treeNode != null) {
+          TreeNode? find(TreeNode n) {
+            if (n.relativePath == p) return n;
+            for (final c in n.children) {
+              final res = find(c);
+              if (res != null) return res;
+            }
+            return null;
+          }
+
+          final match = find(treeNode);
+          if (match != null && match.isDirectory) isDir = true;
+        }
+
+        if (isDir) {
+          formattedPatterns.add('$p/**');
+        } else {
+          formattedPatterns.add(p);
+        }
+      }
+
+      final set = current.ignorePatterns.toSet()..addAll(formattedPatterns);
       await updateCurrentConfig(ignorePatterns: set.toList());
     } catch (e) {
       debugPrint('Failed to add ignore patterns: $e');
     }
   }
 
-  // Toggles the local UI visual visibility status parameters of directory trees
+  /// Toggles the local UI visual visibility status parameters of directory trees.
   void toggleNodeExpanded(String nodePath) {
     try {
       final currentState = _ref.read(expansionStateProvider);
@@ -624,7 +671,7 @@ class AppStateController {
     }
   }
 
-  // Helper method persisting last selected project ID in window state file
+  /// Helper method persisting last selected project ID in window state file.
   Future<void> _saveLastSelectedProject(String projectId) async {
     try {
       final configService = _ref.read(configServiceProvider);
@@ -636,7 +683,7 @@ class AppStateController {
     }
   }
 
-  // Helper method persisting chosen project sort option
+  /// Helper method persisting chosen project sort option.
   Future<void> _saveSortOption(ProjectSortOption sortOption) async {
     try {
       final configService = _ref.read(configServiceProvider);
@@ -648,7 +695,7 @@ class AppStateController {
     }
   }
 
-  // Completely resets active cache snapshots matching selected identifier parameters
+  /// Completely resets active cache snapshots matching selected identifier parameters.
   Future<void> _clearSnapshot(String configId) async {
     try {
       final snapshots = _ref.read(projectSnapshotsProvider.notifier);

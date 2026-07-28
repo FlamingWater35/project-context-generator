@@ -1,67 +1,13 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:silky_scroll/silky_scroll.dart';
 
-import '../models/tree_node.dart';
 import '../providers/app_state.dart';
 import 'file_node.dart';
 
-// Nested directory render node that renders folders and subfolders iteratively
-class _RecursiveDirectoryNode extends ConsumerWidget {
-  const _RecursiveDirectoryNode({
-    super.key,
-    required this.node,
-    required this.depth,
-  });
-
-  final int depth;
-  final TreeNode node;
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final expansionState = ref.watch(expansionStateProvider);
-    final isExpanded = expansionState[node.relativePath] ?? false;
-
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        FileNodeWidget(
-          key: ValueKey('${node.path}_file'),
-          node: node,
-          depth: depth,
-        ),
-        AnimatedSize(
-          duration: const Duration(milliseconds: 200),
-          curve: Curves.easeInOut,
-          alignment: Alignment.topCenter,
-          child: isExpanded
-              ? Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: node.children.map((child) {
-                    if (child.isDirectory) {
-                      return _RecursiveDirectoryNode(
-                        key: ValueKey(child.path),
-                        node: child,
-                        depth: depth + 1,
-                      );
-                    }
-                    return FileNodeWidget(
-                      key: ValueKey(child.path),
-                      node: child,
-                      depth: depth + 1,
-                    );
-                  }).toList(),
-                )
-              : const SizedBox.shrink(),
-        ),
-      ],
-    );
-  }
-}
-
-// Tree view layout organizing folder hierarchies inside horizontal and vertical scrolls with multi-selection action toolbar
+/// Virtualized tree view layout rendering flattened directory items cleanly across responsive viewports with silky smooth scroll physics.
 class ProjectTreeView extends ConsumerStatefulWidget {
   const ProjectTreeView({super.key});
 
@@ -80,27 +26,6 @@ class _ProjectTreeViewState extends ConsumerState<ProjectTreeView> {
     super.dispose();
   }
 
-  // Analyzes structural expansion paths to find the maximum horizontal depth
-  int _calculateMaxVisibleDepth(
-    List<TreeNode> nodes,
-    Map<String, bool> expansionState,
-    int currentDepth,
-  ) {
-    int maxD = currentDepth;
-    for (final node in nodes) {
-      if (currentDepth > maxD) maxD = currentDepth;
-      if (node.isDirectory && (expansionState[node.relativePath] ?? false)) {
-        final d = _calculateMaxVisibleDepth(
-          node.children,
-          expansionState,
-          currentDepth + 1,
-        );
-        if (d > maxD) maxD = d;
-      }
-    }
-    return maxD;
-  }
-
   @override
   Widget build(BuildContext context) {
     final treeAsync = ref.watch(fileTreeProvider);
@@ -111,17 +36,27 @@ class _ProjectTreeViewState extends ConsumerState<ProjectTreeView> {
     return treeAsync.when(
       data: (rootNode) {
         if (rootNode == null) {
-          return const Center(
-            child: Text('Please select a valid root folder.'),
+          return Center(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(Icons.folder_open, size: 48, color: Colors.grey.shade600),
+                const SizedBox(height: 12),
+                Text(
+                  'No root folder selected.',
+                  style: TextStyle(color: Colors.grey.shade400, fontSize: 15),
+                ),
+              ],
+            ),
           );
         }
 
-        final maxDepth = _calculateMaxVisibleDepth(
-          rootNode.children,
-          expansionState,
-          0,
-        );
-        final requiredWidth = maxDepth * 24.0 + 350.0;
+        final flatItems = rootNode.flattenVisibleTree(expansionState);
+
+        int maxDepth = 0;
+        for (final item in flatItems) {
+          if (item.depth > maxDepth) maxDepth = item.depth;
+        }
 
         return Column(
           children: [
@@ -190,13 +125,15 @@ class _ProjectTreeViewState extends ConsumerState<ProjectTreeView> {
                 ),
               ),
 
-            // Scrollable File Tree Container
+            // Responsive Virtualized ListView File Tree Container with Silky Scroll
             Expanded(
               child: LayoutBuilder(
                 builder: (context, constraints) {
-                  final targetWidth = requiredWidth > constraints.maxWidth
-                      ? requiredWidth
-                      : constraints.maxWidth;
+                  final double calculatedWidth = maxDepth * 22.0 + 500.0;
+                  final double targetWidth = math.max(
+                    constraints.maxWidth,
+                    calculatedWidth,
+                  );
 
                   return Scrollbar(
                     controller: _horizontalController,
@@ -204,49 +141,26 @@ class _ProjectTreeViewState extends ConsumerState<ProjectTreeView> {
                     child: SilkySingleChildScrollView(
                       controller: _horizontalController,
                       scrollDirection: Axis.horizontal,
-                      scrollSpeed: 1.4,
-                      silkyScrollDuration: const Duration(milliseconds: 1000),
-                      child: AnimatedContainer(
-                        duration: const Duration(milliseconds: 200),
-                        curve: Curves.easeInOut,
-                        constraints: BoxConstraints(
-                          minWidth: constraints.maxWidth,
-                          maxWidth: targetWidth,
-                        ),
+                      child: SizedBox(
+                        width: targetWidth,
+                        height: constraints.maxHeight,
                         child: Scrollbar(
                           controller: _scrollController,
                           thumbVisibility: true,
-                          child: SilkySingleChildScrollView(
+                          child: SilkyListView.builder(
                             controller: _scrollController,
-                            scrollSpeed: 1.4,
-                            silkyScrollDuration: const Duration(
-                              milliseconds: 1000,
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 16.0,
+                              vertical: 6.0,
                             ),
-                            padding: const EdgeInsets.only(
-                              left: 16.0,
-                              right: 24.0,
-                              top: 8.0,
-                              bottom: 8.0,
-                            ),
-                            child: RepaintBoundary(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.stretch,
-                                children: rootNode.children.map((child) {
-                                  if (child.isDirectory) {
-                                    return _RecursiveDirectoryNode(
-                                      key: ValueKey(child.path),
-                                      node: child,
-                                      depth: 0,
-                                    );
-                                  }
-                                  return FileNodeWidget(
-                                    key: ValueKey(child.path),
-                                    node: child,
-                                    depth: 0,
-                                  );
-                                }).toList(),
-                              ),
-                            ),
+                            itemCount: flatItems.length,
+                            itemBuilder: (context, index) {
+                              final item = flatItems[index];
+                              return RepaintBoundary(
+                                key: ValueKey(item.node.path),
+                                child: FileNodeWidget(item: item),
+                              );
+                            },
                           ),
                         ),
                       ),
@@ -259,7 +173,12 @@ class _ProjectTreeViewState extends ConsumerState<ProjectTreeView> {
         );
       },
       loading: () => const Center(child: CircularProgressIndicator()),
-      error: (err, stack) => Center(child: Text('Error: $err')),
+      error: (err, stack) => Center(
+        child: Text(
+          'Error building directory tree: $err',
+          style: const TextStyle(color: Colors.redAccent),
+        ),
+      ),
     );
   }
 }

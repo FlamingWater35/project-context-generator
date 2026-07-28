@@ -1,4 +1,22 @@
-// Immutable data structure representing a structural node in the filesystem tree
+import 'package:flutter/foundation.dart';
+
+/// Represents a flattened row item in the virtualized tree list view.
+@immutable
+class FlatTreeItem {
+  const FlatTreeItem({
+    required this.node,
+    required this.depth,
+    required this.isExpanded,
+    required this.hasChildren,
+  });
+
+  final int depth;
+  final bool hasChildren;
+  final bool isExpanded;
+  final TreeNode node;
+}
+
+/// Immutable data structure representing a structural node in the filesystem tree.
 class TreeNode {
   const TreeNode({
     required this.path,
@@ -16,7 +34,7 @@ class TreeNode {
   final String path;
   final String relativePath;
 
-  // Safely creates a cloned copy of the TreeNode with updated properties
+  /// Safely creates a cloned copy of the TreeNode with updated properties.
   TreeNode copyWith({
     String? path,
     String? relativePath,
@@ -33,5 +51,45 @@ class TreeNode {
       children: children ?? this.children,
       isNew: isNew ?? this.isNew,
     );
+  }
+
+  /// Recursively flattens the visible tree nodes into a 1D list for virtualized ListView rendering.
+  List<FlatTreeItem> flattenVisibleTree(
+    Map<String, bool> expansionState, {
+    int depth = 0,
+  }) {
+    final List<FlatTreeItem> result = [];
+
+    for (final child in children) {
+      final isExpanded = expansionState[child.relativePath] ?? false;
+      final hasChildren = child.isDirectory && child.children.isNotEmpty;
+
+      result.add(
+        FlatTreeItem(
+          node: child,
+          depth: depth,
+          isExpanded: isExpanded,
+          hasChildren: hasChildren,
+        ),
+      );
+
+      if (child.isDirectory && isExpanded) {
+        result.addAll(
+          child.flattenVisibleTree(expansionState, depth: depth + 1),
+        );
+      }
+    }
+
+    return result;
+  }
+
+  /// Retrieves all descendant relative file paths recursively under this node.
+  List<String> getAllFilePaths() {
+    if (!isDirectory) return [relativePath];
+    final List<String> paths = [];
+    for (final child in children) {
+      paths.addAll(child.getAllFilePaths());
+    }
+    return paths;
   }
 }

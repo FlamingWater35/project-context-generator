@@ -59,12 +59,12 @@ class PromptBuildResult {
   final int totalLines;
 }
 
-// Helper evaluating pattern structures to parse files matching ignore lists
+/// Helper evaluating pattern structures to parse files matching ignore lists securely.
 class _IgnoreRule {
   factory _IgnoreRule(String pattern) {
     String pStr = pattern.trim();
     if (pStr.isEmpty || pStr.startsWith('#')) {
-      return _IgnoreRule._(null, null, null, null);
+      return const _IgnoreRule._(null, null, null, null);
     }
 
     bool onlyDirs = false;
@@ -73,50 +73,49 @@ class _IgnoreRule {
       pStr = pStr.substring(0, pStr.length - 1);
     }
 
-    String pruneP = pStr;
-    if (pruneP.endsWith('/**')) {
-      pruneP = pruneP.substring(0, pruneP.length - 3);
-    } else if (pruneP.endsWith('/*')) {
-      pruneP = pruneP.substring(0, pruneP.length - 2);
+    // Properly strip trailing wildcard suffixes to get clean base path pattern
+    String basePattern = pStr;
+    if (basePattern.endsWith('/**')) {
+      basePattern = basePattern.substring(0, basePattern.length - 3);
+    } else if (basePattern.endsWith('/*')) {
+      basePattern = basePattern.substring(0, basePattern.length - 2);
     }
 
     bool isRootAnchored = false;
-    if (pStr.startsWith('/')) {
+    if (basePattern.startsWith('/')) {
       isRootAnchored = true;
-      pStr = pStr.substring(1);
-      if (pruneP.startsWith('/')) pruneP = pruneP.substring(1);
+      basePattern = basePattern.substring(1);
     }
 
-    String pStrForSlashCheck = pStr;
-    if (pStrForSlashCheck.endsWith('/**')) {
-      pStrForSlashCheck = pStrForSlashCheck.substring(
-        0,
-        pStrForSlashCheck.length - 3,
-      );
-    } else if (pStrForSlashCheck.endsWith('/*')) {
-      pStrForSlashCheck = pStrForSlashCheck.substring(
-        0,
-        pStrForSlashCheck.length - 2,
-      );
+    if (basePattern.isEmpty) {
+      return const _IgnoreRule._(null, null, null, null);
     }
 
-    final bool hasInternalSlash =
-        pStrForSlashCheck.contains('/') && !pStrForSlashCheck.startsWith('**/');
+    final bool hasInternalSlash = basePattern.contains('/');
 
     Glob? rootGlob;
     Glob? nestedGlob;
     Glob? dirGlob;
     Glob? pruneGlob;
 
-    if (!isRootAnchored && !hasInternalSlash) {
-      if (!onlyDirs) rootGlob = Glob(pStr, context: p.posix);
-      if (!onlyDirs) nestedGlob = Glob('**/$pStr', context: p.posix);
-      dirGlob = Glob('**/$pStr/**', context: p.posix);
-      if (pruneP.isNotEmpty) pruneGlob = Glob('**/$pruneP', context: p.posix);
-    } else {
-      if (!onlyDirs) rootGlob = Glob(pStr, context: p.posix);
-      dirGlob = Glob('$pStr/**', context: p.posix);
-      if (pruneP.isNotEmpty) pruneGlob = Glob(pruneP, context: p.posix);
+    try {
+      if (!isRootAnchored && !hasInternalSlash) {
+        if (!onlyDirs) {
+          rootGlob = Glob(basePattern, context: p.posix);
+          nestedGlob = Glob('**/$basePattern', context: p.posix);
+        }
+        dirGlob = Glob('**/$basePattern/**', context: p.posix);
+        pruneGlob = Glob('**/$basePattern', context: p.posix);
+      } else {
+        if (!onlyDirs) {
+          rootGlob = Glob(basePattern, context: p.posix);
+          nestedGlob = Glob('**/$basePattern', context: p.posix);
+        }
+        dirGlob = Glob('$basePattern/**', context: p.posix);
+        pruneGlob = Glob(basePattern, context: p.posix);
+      }
+    } catch (e) {
+      debugPrint('Failed to parse ignore pattern "$pattern": $e');
     }
 
     return _IgnoreRule._(rootGlob, nestedGlob, dirGlob, pruneGlob);
@@ -134,7 +133,7 @@ class _IgnoreRule {
   final Glob? pruneGlob;
   final Glob? rootGlob;
 
-  // Verifies matches against normalized dynamic locations
+  /// Verifies matches against normalized relative path targets.
   bool matches(String path, String pathWithSlash) {
     if (rootGlob != null && rootGlob!.matches(path)) return true;
     if (nestedGlob != null && nestedGlob!.matches(path)) return true;
@@ -142,7 +141,7 @@ class _IgnoreRule {
     return false;
   }
 
-  // Verifies matches specifically mapping to folder objects
+  /// Verifies matches specifically mapping to folder objects.
   bool matchesDir(String path) {
     if (pruneGlob != null && pruneGlob!.matches(path)) return true;
     if (rootGlob != null && rootGlob!.matches(path)) return true;
@@ -151,11 +150,11 @@ class _IgnoreRule {
   }
 }
 
-// Background utility service analyzing directories, matching ignores, and processing files & skills
+/// Background utility service analyzing directories, matching ignores, and processing files & skills.
 class FsService {
   static const int _maxFileSizeBytes = 1024 * 1024;
 
-  // Formats drive indicators on Windows platforms to avoid reference collision
+  /// Formats drive indicators on Windows platforms to avoid reference collision.
   static String _normalizeDriveLetter(String path) {
     if (Platform.isWindows && path.length >= 2 && path[1] == ':') {
       return path[0].toUpperCase() + path.substring(1);
@@ -163,7 +162,7 @@ class FsService {
     return path;
   }
 
-  // Performs folder file discovery on an external Isolate to prevent UI lockups
+  /// Performs folder file discovery on an external Isolate to prevent UI lockups.
   Future<Set<String>> scanPaths(
     String rootPath,
     List<String> ignorePatterns,
@@ -176,7 +175,7 @@ class FsService {
     }
   }
 
-  // Assembles structural TreeNode layouts inside background workers
+  /// Assembles structural TreeNode layouts inside background workers.
   Future<TreeNode?> buildTree(
     String rootPath,
     List<String> ignorePatterns, {
@@ -210,7 +209,7 @@ class FsService {
     }
   }
 
-  /// Scans the project directory to detect actual agent skill files (e.g. SKILL.md, .prompt.md, .cursor/rules, etc.).
+  /// Scans the project directory to detect actual agent skill files.
   Future<List<AgentSkill>> detectSkills(String rootPath) async {
     if (rootPath.isEmpty) return const [];
     try {
@@ -224,7 +223,7 @@ class FsService {
     }
   }
 
-  // Safe file reader processing content boundaries, checking file size and binaries
+  /// Safe file reader processing content boundaries, checking file size and binary headers.
   Future<String> readFile(String path) async {
     final file = File(path);
     try {
@@ -239,7 +238,7 @@ class FsService {
       final headerBytes = await raf.read(8192);
       await raf.close();
 
-      if (_isBinaryData(headerBytes)) {
+      if (_isBinaryDataSync(headerBytes)) {
         return '<Binary file>';
       }
 
@@ -249,24 +248,12 @@ class FsService {
     }
   }
 
-  // Traverses structures recursively to list paths beneath a target parent
+  /// Traverses structures recursively to list file paths beneath a target parent.
   List<String> getRecursiveFiles(TreeNode dirNode) {
-    final List<String> files = [];
-    void traverse(TreeNode node) {
-      if (!node.isDirectory) {
-        files.add(node.relativePath);
-      } else {
-        for (final child in node.children) {
-          traverse(child);
-        }
-      }
-    }
-
-    traverse(dirNode);
-    return files;
+    return dirNode.getAllFilePaths();
   }
 
-  // Synchronous prompt assembly logic designed for background Isolate targets
+  /// Synchronous prompt assembly logic designed for background Isolate targets.
   static PromptBuildResult _buildPromptContextSync(PromptBuildParams params) {
     final rootDir = Directory(params.rootPath);
     if (!rootDir.existsSync()) {
@@ -422,9 +409,8 @@ class FsService {
       final previewLinesStr = lines.take(2000).join('\n');
       final previewCharCount = previewLinesStr.length;
       displayText =
-          '$previewLinesStr\n\n--- [PREVIEW TRUNCATED: Showing first 2000 of $totalLines lines. Click "Copy Full Prompt" to copy 100% of context] ---';
+          '$previewLinesStr\n\n--- [PREVIEW TRUNCATED: Showing first 2000 of $totalLines lines. Click "Generate & Copy" to copy 100% of context] ---';
 
-      // Filter sections to include ONLY those present in the displayed preview
       effectiveSections = sections
           .where((sec) => sec.charIndex < previewCharCount)
           .toList();
@@ -441,7 +427,7 @@ class FsService {
     );
   }
 
-  // Synchronous tree string builder for prompt assembly
+  /// Synchronous tree string builder for prompt assembly.
   static void _buildTreeStringSync(
     TreeNode node,
     StringBuffer buffer,
@@ -473,7 +459,7 @@ class FsService {
     }
   }
 
-  // Synchronous traversal analyzer logic designed for Isolate targets
+  /// Synchronous traversal analyzer logic designed for Isolate targets.
   static Set<String> _scanPathsSync(
     String rootPath,
     List<String> ignorePatterns,
@@ -490,7 +476,7 @@ class FsService {
     try {
       canonicalRoot = _normalizeDriveLetter(dir.resolveSymbolicLinksSync());
       canonicalDir = Directory(canonicalRoot);
-    } catch (e) {
+    } catch (_) {
       canonicalRoot = _normalizeDriveLetter(rootPath);
       canonicalDir = dir;
     }
@@ -524,24 +510,23 @@ class FsService {
 
             if (!skip) {
               paths.add(relPath);
-              if (isDir) {
+              // Direct type promotion check prevents runtime TypeError on Directory cast
+              if (entity is Directory) {
                 traverse(entity);
               }
             }
-          } catch (e) {
+          } catch (_) {
             continue;
           }
         }
-      } catch (e) {
-        // Inaccessible directory - skip
-      }
+      } catch (_) {}
     }
 
     traverse(canonicalDir);
     return paths;
   }
 
-  // Synchronous directory assembler logic designed for background Isolate runners
+  /// Synchronous directory assembler logic designed for background Isolate runners.
   static TreeNode? _buildTreeSync(
     String rootPath,
     List<String> ignorePatterns,
@@ -555,7 +540,7 @@ class FsService {
     try {
       canonicalRoot = _normalizeDriveLetter(dir.resolveSymbolicLinksSync());
       canonicalDir = Directory(canonicalRoot);
-    } catch (e) {
+    } catch (_) {
       canonicalRoot = _normalizeDriveLetter(rootPath);
       canonicalDir = dir;
     }
@@ -617,13 +602,11 @@ class FsService {
               children.add(populatedChild);
               if (populatedChild.isNew) anyChildIsNew = true;
             }
-          } catch (e) {
+          } catch (_) {
             continue;
           }
         }
-      } catch (e) {
-        // Inaccessible folder
-      }
+      } catch (_) {}
 
       children.removeWhere(
         (child) => child.isDirectory && child.children.isEmpty,
@@ -726,7 +709,6 @@ class FsService {
                       description = 'Agent skill from $relPath';
                     }
 
-                    // Safely scan skill references ONLY if the skill is inside a subfolder
                     final List<AgentSkillReference> references = [];
                     final skillDir = entity.parent;
                     final skillDirNorm = _normalizeDriveLetter(skillDir.path);
@@ -801,9 +783,7 @@ class FsService {
                       ),
                     );
                   }
-                } catch (e) {
-                  // Ignore unreadable skill file
-                }
+                } catch (_) {}
               }
             }
           } catch (_) {
@@ -846,7 +826,7 @@ class FsService {
     return result;
   }
 
-  // Synchronous binary data evaluator
+  /// Synchronous binary data evaluator checking null byte ratios.
   static bool _isBinaryDataSync(Uint8List data) {
     if (data.isEmpty) return false;
 
@@ -865,10 +845,5 @@ class FsService {
     if ((controlChars / length) > 0.1) return true;
 
     return false;
-  }
-
-  // Analyzes headers to determine if files contain binary rather than text data
-  bool _isBinaryData(Uint8List data) {
-    return _isBinaryDataSync(data);
   }
 }

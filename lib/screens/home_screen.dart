@@ -1,5 +1,6 @@
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../models/project_config.dart';
@@ -12,7 +13,12 @@ import '../widgets/skills_dialog.dart';
 import '../widgets/snackbar.dart';
 import '../widgets/tree_view.dart';
 
-// Visual primary home screen containing sidebar controls, top header bar, tree view, and bottom metrics status bar
+/// Intent object handling global shortcut triggers.
+class GenerateIntent extends Intent {
+  const GenerateIntent();
+}
+
+/// Visual primary home screen containing sidebar controls, top header bar, tree view, and status bar.
 class HomeScreen extends ConsumerStatefulWidget {
   const HomeScreen({super.key});
 
@@ -29,7 +35,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     _loadSidebarWidth();
   }
 
-  // Restores saved workspace layout width parameters safely on widget initialization
+  /// Restores saved workspace layout width parameters safely on widget initialization.
   Future<void> _loadSidebarWidth() async {
     try {
       final configService = ref.read(configServiceProvider);
@@ -48,7 +54,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     }
   }
 
-  // Recovers altered local parameters, verifying disk updates directly
+  /// Recovers altered local parameters, verifying disk updates directly.
   Future<void> _handleCheckChanges(BuildContext context, WidgetRef ref) async {
     ref.invalidate(fileTreeProvider);
     try {
@@ -66,7 +72,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     }
   }
 
-  // Triggers OS native directory picking mechanisms with safety handlers
+  /// Triggers OS native directory picking mechanisms with safety handlers.
   Future<void> _handleSelectFolder(BuildContext context, WidgetRef ref) async {
     try {
       final String? selectedDirectory = await FilePicker.getDirectoryPath(
@@ -84,7 +90,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     }
   }
 
-  // Assembles header details cards showing file state, target folder paths, skills, and action controls
+  /// Assembles header details cards showing file state, target folder paths, skills, and action controls.
   Widget _buildHeader(
     BuildContext context,
     WidgetRef ref,
@@ -259,77 +265,112 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   Widget build(BuildContext context) {
     final config = ref.watch(selectedConfigProvider);
 
-    return Scaffold(
-      body: LayoutBuilder(
-        builder: (context, constraints) {
-          final totalWidth = constraints.maxWidth;
-          const minSidebarWidth = 200.0;
-          const minMainWidth = 450.0;
+    return Shortcuts(
+      shortcuts: <ShortcutActivator, Intent>{
+        LogicalKeySet(LogicalKeyboardKey.control, LogicalKeyboardKey.keyG):
+            const GenerateIntent(),
+        LogicalKeySet(LogicalKeyboardKey.meta, LogicalKeyboardKey.keyG):
+            const GenerateIntent(),
+      },
+      child: Actions(
+        actions: <Type, Action<Intent>>{
+          GenerateIntent: CallbackAction<GenerateIntent>(
+            onInvoke: (intent) {
+              return null;
+            },
+          ),
+        },
+        child: Scaffold(
+          body: LayoutBuilder(
+            builder: (context, constraints) {
+              final totalWidth = constraints.maxWidth;
+              const minSidebarWidth = 200.0;
+              const minMainWidth = 450.0;
 
-          double maxSidebarWidth = totalWidth - minMainWidth;
-          if (maxSidebarWidth < minSidebarWidth) {
-            maxSidebarWidth = minSidebarWidth;
-          }
+              double maxSidebarWidth = totalWidth - minMainWidth;
+              if (maxSidebarWidth < minSidebarWidth) {
+                maxSidebarWidth = minSidebarWidth;
+              }
 
-          final activeSidebarWidth = _sidebarWidth.clamp(
-            minSidebarWidth,
-            maxSidebarWidth,
-          );
+              final activeSidebarWidth = _sidebarWidth.clamp(
+                minSidebarWidth,
+                maxSidebarWidth,
+              );
 
-          return Row(
-            children: [
-              SizedBox(width: activeSidebarWidth, child: const Sidebar()),
-              MouseRegion(
-                cursor: SystemMouseCursors.resizeColumn,
-                child: GestureDetector(
-                  behavior: HitTestBehavior.translucent,
-                  onHorizontalDragUpdate: (details) {
-                    setState(() {
-                      _sidebarWidth = (_sidebarWidth + details.delta.dx).clamp(
-                        minSidebarWidth,
-                        maxSidebarWidth,
-                      );
-                    });
-                  },
-                  onHorizontalDragEnd: (_) {
-                    ref.read(sidebarWidthProvider.notifier).state =
-                        _sidebarWidth;
-                  },
-                  child: SizedBox(
-                    width: 12,
-                    child: Stack(
-                      alignment: Alignment.center,
-                      children: [
-                        Container(color: Colors.transparent),
-                        const VerticalDivider(width: 12, thickness: 1.5),
-                      ],
+              return Row(
+                children: [
+                  SizedBox(width: activeSidebarWidth, child: const Sidebar()),
+                  MouseRegion(
+                    cursor: SystemMouseCursors.resizeColumn,
+                    child: GestureDetector(
+                      behavior: HitTestBehavior.translucent,
+                      onHorizontalDragUpdate: (details) {
+                        setState(() {
+                          _sidebarWidth = (_sidebarWidth + details.delta.dx)
+                              .clamp(minSidebarWidth, maxSidebarWidth);
+                        });
+                      },
+                      onHorizontalDragEnd: (_) {
+                        ref.read(sidebarWidthProvider.notifier).state =
+                            _sidebarWidth;
+                      },
+                      child: SizedBox(
+                        width: 12,
+                        child: Stack(
+                          alignment: Alignment.center,
+                          children: [
+                            Container(color: Colors.transparent),
+                            const VerticalDivider(width: 12, thickness: 1.5),
+                          ],
+                        ),
+                      ),
                     ),
                   ),
-                ),
-              ),
-              Expanded(
-                child: config == null
-                    ? const Center(
-                        child: Text('Create or select a project config.'),
-                      )
-                    : Column(
-                        crossAxisAlignment: CrossAxisAlignment.stretch,
-                        children: [
-                          _buildHeader(context, ref, config),
-                          const Expanded(
-                            child: Material(
-                              color: Colors.transparent,
-                              clipBehavior: Clip.hardEdge,
-                              child: ProjectTreeView(),
+                  Expanded(
+                    child: config == null
+                        ? Center(
+                            child: Padding(
+                              padding: const EdgeInsets.all(24.0),
+                              child: Column(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Icon(
+                                    Icons.folder_special,
+                                    size: 64,
+                                    color: Colors.grey.shade600,
+                                  ),
+                                  const SizedBox(height: 16),
+                                  const Text(
+                                    'Create or select a project context configuration.',
+                                    style: TextStyle(
+                                      fontSize: 16,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
+                                ],
+                              ),
                             ),
+                          )
+                        : Column(
+                            crossAxisAlignment: CrossAxisAlignment.stretch,
+                            children: [
+                              _buildHeader(context, ref, config),
+                              const Expanded(
+                                child: Material(
+                                  color: Colors.transparent,
+                                  clipBehavior: Clip.hardEdge,
+                                  child: ProjectTreeView(),
+                                ),
+                              ),
+                              const BottomBar(),
+                            ],
                           ),
-                          const BottomBar(),
-                        ],
-                      ),
-              ),
-            ],
-          );
-        },
+                  ),
+                ],
+              );
+            },
+          ),
+        ),
       ),
     );
   }

@@ -4,14 +4,86 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models/tree_node.dart';
 import '../providers/app_state.dart';
 
-// Tree node widget representing a filesystem leaf or directory containing nested folder metadata
+/// Renders an individual tree node row item with file-type-aware icons, depth indentation guide lines, and inline action buttons.
 class FileNodeWidget extends ConsumerWidget {
-  const FileNodeWidget({super.key, required this.node, required this.depth});
+  const FileNodeWidget({super.key, required this.item});
 
-  final int depth;
-  final TreeNode node;
+  final FlatTreeItem item;
 
-  // Verifies recursively if any nested child is checked utilizing O(1) Set lookups
+  /// Helper evaluating file extension or folder type to return distinct visual icons.
+  Widget _buildNodeIcon(
+    BuildContext context,
+    bool isIncluded,
+    bool hasIncluded,
+  ) {
+    final node = item.node;
+    if (node.isDirectory) {
+      return Icon(
+        item.isExpanded ? Icons.folder_open : Icons.folder,
+        size: 20,
+        color: hasIncluded ? Colors.blue.shade400 : Colors.amber.shade700,
+      );
+    }
+
+    final ext = node.name.contains('.')
+        ? node.name.split('.').last.toLowerCase()
+        : '';
+
+    IconData iconData = Icons.insert_drive_file;
+    Color iconColor = isIncluded ? Colors.white : Colors.grey.shade500;
+
+    switch (ext) {
+      case 'dart':
+        iconData = Icons.code;
+        iconColor = Colors.cyan.shade300;
+        break;
+      case 'js':
+      case 'jsx':
+      case 'ts':
+      case 'tsx':
+        iconData = Icons.javascript;
+        iconColor = Colors.amber.shade300;
+        break;
+      case 'py':
+        iconData = Icons.terminal;
+        iconColor = Colors.green.shade300;
+        break;
+      case 'html':
+      case 'css':
+      case 'scss':
+        iconData = Icons.html;
+        iconColor = Colors.deepOrange.shade300;
+        break;
+      case 'json':
+      case 'yaml':
+      case 'yml':
+      case 'toml':
+        iconData = Icons.data_object;
+        iconColor = Colors.purple.shade300;
+        break;
+      case 'md':
+      case 'txt':
+        iconData = Icons.article;
+        iconColor = Colors.blue.shade200;
+        break;
+      case 'png':
+      case 'jpg':
+      case 'jpeg':
+      case 'svg':
+      case 'ico':
+        iconData = Icons.image;
+        iconColor = Colors.lightGreen.shade300;
+        break;
+      case 'lock':
+        iconData = Icons.lock_clock;
+        iconColor = Colors.red.shade300;
+        break;
+    }
+
+    return Icon(iconData, size: 20, color: iconColor);
+  }
+
+  /// Checks if any nested children under this node are checked in O(1) set lookups.
   bool _hasIncludedChildren(TreeNode node, Set<String> includedSet) {
     if (!node.isDirectory) return includedSet.contains(node.relativePath);
     for (final child in node.children) {
@@ -20,123 +92,91 @@ class FileNodeWidget extends ConsumerWidget {
     return false;
   }
 
-  /// Toggles multi-selection state for batch actions on long press or icon button tap
+  /// Toggles multi-selection highlight state for batch processing.
   void _toggleMultiSelect(WidgetRef ref) {
     final selectedPaths = Set<String>.from(ref.read(selectedNodePathsProvider));
-    if (selectedPaths.contains(node.relativePath)) {
-      selectedPaths.remove(node.relativePath);
+    if (selectedPaths.contains(item.node.relativePath)) {
+      selectedPaths.remove(item.node.relativePath);
     } else {
-      selectedPaths.add(node.relativePath);
+      selectedPaths.add(item.node.relativePath);
     }
     ref.read(selectedNodePathsProvider.notifier).state = selectedPaths;
   }
 
-  /// Displays granular ignore options popup menu for files or folders
+  /// Opens explicit ignore options popup menu.
   void _showIgnoreOptionsMenu(
     BuildContext context,
     WidgetRef ref,
     Offset globalPosition,
   ) {
     final controller = ref.read(appStateControllerProvider);
+    final node = item.node;
     final List<PopupMenuEntry<String>> items = [];
 
     if (node.isDirectory) {
-      final onlyThisDir = '${node.relativePath}/**';
-      final allDirsWithName = '**/${node.name}/**';
-
       items.addAll([
         PopupMenuItem<String>(
-          value: onlyThisDir,
+          value: '${node.relativePath}/**',
           child: Row(
             children: [
-              const Icon(Icons.folder, size: 18, color: Colors.amber),
+              const Icon(Icons.folder, size: 20, color: Colors.amber),
               const SizedBox(width: 8),
               Expanded(
-                child: Text(
-                  'Only this directory (${node.relativePath})',
-                  overflow: TextOverflow.ellipsis,
-                ),
+                child: Text('Only this directory (${node.relativePath})'),
               ),
             ],
           ),
         ),
         PopupMenuItem<String>(
-          value: allDirsWithName,
+          value: '**/${node.name}/**',
           child: Row(
             children: [
-              const Icon(Icons.folder_copy, size: 18, color: Colors.amber),
+              const Icon(Icons.folder_copy, size: 20, color: Colors.amber),
               const SizedBox(width: 8),
-              Expanded(
-                child: Text(
-                  'All directories named "${node.name}"',
-                  overflow: TextOverflow.ellipsis,
-                ),
-              ),
+              Expanded(child: Text('All directories named "${node.name}"')),
             ],
           ),
         ),
       ]);
     } else {
-      final onlyThisFile = node.relativePath;
-      final allFilesWithName = '**/${node.name}';
-
-      items.add(
+      items.addAll([
         PopupMenuItem<String>(
-          value: onlyThisFile,
+          value: node.relativePath,
           child: Row(
             children: [
-              const Icon(Icons.insert_drive_file, size: 18, color: Colors.blue),
+              const Icon(Icons.insert_drive_file, size: 20, color: Colors.blue),
               const SizedBox(width: 8),
-              Expanded(
-                child: Text(
-                  'Only this file (${node.relativePath})',
-                  overflow: TextOverflow.ellipsis,
-                ),
-              ),
+              Expanded(child: Text('Only this file (${node.relativePath})')),
             ],
           ),
         ),
-      );
-
-      items.add(
         PopupMenuItem<String>(
-          value: allFilesWithName,
+          value: '**/${node.name}',
           child: Row(
             children: [
-              const Icon(Icons.file_copy, size: 18, color: Colors.blue),
+              const Icon(Icons.file_copy, size: 20, color: Colors.blue),
               const SizedBox(width: 8),
-              Expanded(
-                child: Text(
-                  'All files named "${node.name}"',
-                  overflow: TextOverflow.ellipsis,
-                ),
-              ),
+              Expanded(child: Text('All files named "${node.name}"')),
             ],
           ),
         ),
-      );
+      ]);
 
       final dotIdx = node.name.lastIndexOf('.');
       if (dotIdx > 0 && dotIdx < node.name.length - 1) {
         final ext = node.name.substring(dotIdx);
-        final sameExtPattern = '*$ext';
         items.add(
           PopupMenuItem<String>(
-            value: sameExtPattern,
+            value: '*$ext',
             child: Row(
               children: [
                 const Icon(
                   Icons.extension,
-                  size: 18,
+                  size: 20,
                   color: Colors.purpleAccent,
                 ),
                 const SizedBox(width: 8),
-                Expanded(
-                  child: Text(
-                    'All files with extension "$ext"',
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                ),
+                Expanded(child: Text('All files with extension "$ext"')),
               ],
             ),
           ),
@@ -162,12 +202,7 @@ class FileNodeWidget extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final config = ref.watch(selectedConfigProvider);
-    if (config == null) return const SizedBox.shrink();
-
-    final expansionState = ref.watch(expansionStateProvider);
-    final isExpanded = expansionState[node.relativePath] ?? false;
-
+    final node = item.node;
     final selectedPaths = ref.watch(selectedNodePathsProvider);
     final isHighlighted = selectedPaths.contains(node.relativePath);
     final bool isMultiSelectActive = selectedPaths.isNotEmpty;
@@ -180,25 +215,12 @@ class FileNodeWidget extends ConsumerWidget {
         : isIncluded;
     final controller = ref.read(appStateControllerProvider);
 
-    return GestureDetector(
-      onLongPress: () => _toggleMultiSelect(ref),
-      onSecondaryTapDown: (details) {
-        if (isMultiSelectActive) {
-          _toggleMultiSelect(ref);
-        } else {
-          if (!selectedPaths.contains(node.relativePath)) {
-            ref.read(selectedNodePathsProvider.notifier).state = {
-              node.relativePath,
-            };
-          }
-          _showIgnoreOptionsMenu(context, ref, details.globalPosition);
-        }
-      },
+    return Container(
+      margin: const EdgeInsets.symmetric(vertical: 0.5),
       child: InkWell(
         borderRadius: BorderRadius.circular(4),
         onTap: () {
           if (isMultiSelectActive) {
-            // Tapping row in multi-select mode toggles multi-select inclusion
             _toggleMultiSelect(ref);
           } else {
             if (node.isDirectory) {
@@ -209,61 +231,82 @@ class FileNodeWidget extends ConsumerWidget {
           }
         },
         onLongPress: () => _toggleMultiSelect(ref),
-        hoverColor: Colors.white.withAlpha(13),
-        splashColor: Colors.white.withAlpha(26),
-        highlightColor: Colors.white.withAlpha(13),
+        onSecondaryTapDown: (details) {
+          if (isMultiSelectActive) {
+            _toggleMultiSelect(ref);
+          } else {
+            _showIgnoreOptionsMenu(context, ref, details.globalPosition);
+          }
+        },
         child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 8.0, vertical: 2.5),
           decoration: BoxDecoration(
             color: isHighlighted
                 ? Theme.of(context).colorScheme.primaryContainer.withAlpha(120)
                 : Colors.transparent,
             borderRadius: BorderRadius.circular(4),
           ),
-          padding: const EdgeInsets.symmetric(vertical: 4.0, horizontal: 4.0),
           child: Row(
             children: [
-              SizedBox(width: depth * 24.0),
+              // Structural Depth Indentation Guides (Explicit height matches tight row padding)
+              for (int i = 0; i < item.depth; i++)
+                const SizedBox(
+                  width: 22,
+                  child: Center(
+                    child: SizedBox(
+                      width: 1,
+                      height: 24,
+                      child: DecoratedBox(
+                        decoration: BoxDecoration(color: Colors.white12),
+                      ),
+                    ),
+                  ),
+                ),
+
               if (node.isDirectory)
                 IconButton(
                   icon: AnimatedRotation(
-                    turns: isExpanded ? 0.25 : 0.0,
-                    duration: const Duration(milliseconds: 200),
+                    turns: item.isExpanded ? 0.25 : 0.0,
+                    duration: const Duration(milliseconds: 180),
                     curve: Curves.easeInOut,
                     child: const Icon(Icons.keyboard_arrow_right, size: 20),
                   ),
-                  // Expand/collapse disabled when in multi-select mode
                   onPressed: isMultiSelectActive
                       ? null
                       : () => controller.toggleNodeExpanded(node.relativePath),
                   padding: EdgeInsets.zero,
-                  constraints: const BoxConstraints(),
+                  constraints: const BoxConstraints(
+                    minWidth: 24,
+                    minHeight: 24,
+                  ),
                   color: hasIncluded ? null : Colors.grey.shade600,
                 )
               else
-                const SizedBox(width: 20),
+                const SizedBox(width: 24),
 
-              if (!node.isDirectory)
-                Checkbox(
-                  visualDensity: VisualDensity.compact,
-                  value: isIncluded,
-                  // Single file check/uncheck disabled when in multi-select mode
-                  onChanged: isMultiSelectActive
-                      ? null
-                      : (val) {
-                          if (val != null) {
-                            controller.toggleFile(node.relativePath, val);
-                          }
-                        },
+              if (!node.isDirectory) ...[
+                SizedBox(
+                  width: 24,
+                  height: 24,
+                  child: Checkbox(
+                    visualDensity: VisualDensity.compact,
+                    value: isIncluded,
+                    onChanged: isMultiSelectActive
+                        ? null
+                        : (val) {
+                            if (val != null) {
+                              controller.toggleFile(node.relativePath, val);
+                            }
+                          },
+                  ),
                 ),
+                // Explicit padding between checkbox and file icon
+                const SizedBox(width: 12),
+              ],
 
-              Icon(
-                node.isDirectory ? Icons.folder : Icons.insert_drive_file,
-                size: 20,
-                color: node.isDirectory
-                    ? (hasIncluded ? Colors.blue : Colors.grey.shade600)
-                    : (isIncluded ? Colors.white : Colors.grey.shade600),
-              ),
-              const SizedBox(width: 8),
+              _buildNodeIcon(context, isIncluded, hasIncluded),
+              const SizedBox(width: 10),
+
               Expanded(
                 child: Row(
                   children: [
@@ -271,10 +314,11 @@ class FileNodeWidget extends ConsumerWidget {
                       child: Text(
                         node.name,
                         style: TextStyle(
+                          fontSize: 14,
                           color: hasIncluded || isIncluded
                               ? Colors.white
-                              : Colors.grey.shade500,
-                          fontWeight: isIncluded ? FontWeight.bold : null,
+                              : Colors.grey.shade400,
+                          fontWeight: isIncluded ? FontWeight.w600 : null,
                         ),
                         overflow: TextOverflow.ellipsis,
                       ),
@@ -283,17 +327,17 @@ class FileNodeWidget extends ConsumerWidget {
                       const SizedBox(width: 8),
                       Container(
                         padding: const EdgeInsets.symmetric(
-                          horizontal: 4,
-                          vertical: 1,
+                          horizontal: 5,
+                          vertical: 2,
                         ),
                         decoration: BoxDecoration(
-                          color: Colors.amber.shade800,
+                          color: Colors.amber.shade900,
                           borderRadius: BorderRadius.circular(4),
                         ),
                         child: const Text(
                           'NEW',
                           style: TextStyle(
-                            fontSize: 9,
+                            fontSize: 9.5,
                             fontWeight: FontWeight.bold,
                             color: Colors.white,
                           ),
@@ -304,7 +348,9 @@ class FileNodeWidget extends ConsumerWidget {
                 ),
               ),
 
-              // Folder Selection Actions Dropdown Menu (Disabled in multi-select mode)
+              const SizedBox(width: 8),
+
+              // Folder selection dropdown menu button (for directories)
               if (node.isDirectory)
                 PopupMenuButton<String>(
                   icon: Icon(
@@ -314,9 +360,7 @@ class FileNodeWidget extends ConsumerWidget {
                         ? Colors.grey.shade700
                         : Colors.grey.shade500,
                   ),
-                  tooltip: isMultiSelectActive
-                      ? 'Selection options disabled in multi-select mode'
-                      : 'Folder File Selection Options',
+                  tooltip: 'Folder Selection Options',
                   enabled: !isMultiSelectActive,
                   onSelected: (action) {
                     if (action == 'select_all') {
@@ -327,45 +371,23 @@ class FileNodeWidget extends ConsumerWidget {
                       controller.invertSelection(node);
                     }
                   },
-                  itemBuilder: (context) => [
-                    const PopupMenuItem<String>(
+                  itemBuilder: (context) => const [
+                    PopupMenuItem<String>(
                       value: 'select_all',
-                      child: Row(
-                        children: [
-                          Icon(Icons.check_box, size: 18, color: Colors.blue),
-                          SizedBox(width: 8),
-                          Text('Select all contained files'),
-                        ],
-                      ),
+                      child: Text('Select all contained files'),
                     ),
-                    const PopupMenuItem<String>(
+                    PopupMenuItem<String>(
                       value: 'select_none',
-                      child: Row(
-                        children: [
-                          Icon(
-                            Icons.check_box_outline_blank,
-                            size: 18,
-                            color: Colors.grey,
-                          ),
-                          SizedBox(width: 8),
-                          Text('Deselect all contained files'),
-                        ],
-                      ),
+                      child: Text('Deselect all contained files'),
                     ),
-                    const PopupMenuItem<String>(
+                    PopupMenuItem<String>(
                       value: 'invert',
-                      child: Row(
-                        children: [
-                          Icon(Icons.swap_horiz, size: 18, color: Colors.amber),
-                          SizedBox(width: 8),
-                          Text('Invert file selection'),
-                        ],
-                      ),
+                      child: Text('Invert selection'),
                     ),
                   ],
                 ),
 
-              // Multi-select Highlight Toggle Button (Always enabled)
+              // Multi-select toggle button
               IconButton(
                 icon: Icon(
                   isHighlighted
@@ -374,7 +396,7 @@ class FileNodeWidget extends ConsumerWidget {
                   size: 18,
                   color: isHighlighted
                       ? Theme.of(context).colorScheme.primary
-                      : Colors.grey.shade500,
+                      : Colors.grey.shade600,
                 ),
                 tooltip: isHighlighted
                     ? 'Remove from multi-select'
@@ -382,7 +404,7 @@ class FileNodeWidget extends ConsumerWidget {
                 onPressed: () => _toggleMultiSelect(ref),
               ),
 
-              // Ignore Options Dropdown Button (Disabled in multi-select mode)
+              // Ignore Options IconButton
               Builder(
                 builder: (btnContext) => IconButton(
                   icon: Icon(
