@@ -25,12 +25,30 @@ class _IgnoreListDialogState extends ConsumerState<IgnoreListDialog> {
     '.dart_tool/**',
     '*.lock',
     '*.g.dart',
+    '*.freezed.dart',
     '.idea/**',
     '.vscode/**',
     'dist/**',
     'target/**',
     'vendor/**',
     '.DS_Store',
+    'Thumbs.db',
+    'coverage/**',
+    '__pycache__/**',
+    '*.pyc',
+    '.venv/**',
+    'venv/**',
+    '.env',
+    '.env.*',
+    '*.log',
+    '.next/**',
+    '.nuxt/**',
+    'out/**',
+    'bin/**',
+    'obj/**',
+    '.gradle/**',
+    '.project',
+    '.classpath',
   ];
 
   late List<String> ignores;
@@ -71,8 +89,8 @@ class _IgnoreListDialogState extends ConsumerState<IgnoreListDialog> {
   Widget build(BuildContext context) {
     final screenSize = MediaQuery.of(context).size;
 
-    final dialogWidth = math.min(screenSize.width * 0.9, 1000.0);
-    final dialogHeight = math.min(screenSize.height * 0.9, 800.0);
+    final dialogWidth = math.min(screenSize.width * 0.9, 850.0);
+    final dialogHeight = math.min(screenSize.height * 0.85, 700.0);
 
     return AlertDialog(
       title: Row(

@@ -8,6 +8,36 @@ import 'package:path/path.dart' as p;
 import '../models/agent_skill.dart';
 import '../models/tree_node.dart';
 
+/// Input parameters required for building a project context prompt in a background Isolate.
+class PromptBuildParams {
+  const PromptBuildParams({
+    required this.projectName,
+    required this.rootPath,
+    required this.includedFiles,
+    required this.selectedSkills,
+    required this.ignorePatterns,
+  });
+
+  final List<String> ignorePatterns;
+  final List<String> includedFiles;
+  final String projectName;
+  final String rootPath;
+  final List<AgentSkill> selectedSkills;
+}
+
+/// Output parameters produced from background Isolate prompt assembly.
+class PromptBuildResult {
+  const PromptBuildResult({
+    required this.promptText,
+    required this.fileCount,
+    required this.skillCount,
+  });
+
+  final int fileCount;
+  final String promptText;
+  final int skillCount;
+}
+
 // Helper evaluating pattern structures to parse files matching ignore lists
 class _IgnoreRule {
   factory _IgnoreRule(String pattern) {
@@ -141,7 +171,21 @@ class FsService {
     }
   }
 
-  /// Scans the project directory to detect agent skill files (e.g. SKILL.md, .prompt.md, .cursor/rules, etc.).
+  /// Assembles the complete context prompt in a background Isolate to prevent UI lockups.
+  Future<PromptBuildResult> buildPromptContext(PromptBuildParams params) async {
+    try {
+      return await Isolate.run(() => _buildPromptContextSync(params));
+    } catch (e) {
+      debugPrint('Background Isolate prompt construction failed: $e');
+      return const PromptBuildResult(
+        promptText: 'Error generating prompt context.',
+        fileCount: 0,
+        skillCount: 0,
+      );
+    }
+  }
+
+  /// Scans the project directory to detect actual agent skill files (e.g. SKILL.md, .prompt.md, .cursor/rules, etc.).
   Future<List<AgentSkill>> detectSkills(String rootPath) async {
     if (rootPath.isEmpty) return const [];
     try {
@@ -195,6 +239,153 @@ class FsService {
 
     traverse(dirNode);
     return files;
+  }
+
+  // Synchronous prompt assembly logic designed for background Isolate targets
+  static PromptBuildResult _buildPromptContextSync(PromptBuildParams params) {
+    final rootDir = Directory(params.rootPath);
+    if (!rootDir.existsSync()) {
+      return const PromptBuildResult(
+        promptText: 'Root directory does not exist.',
+        fileCount: 0,
+        skillCount: 0,
+      );
+    }
+
+    String canonicalRoot;
+    try {
+      canonicalRoot = _normalizeDriveLetter(rootDir.resolveSymbolicLinksSync());
+    } catch (_) {
+      canonicalRoot = _normalizeDriveLetter(params.rootPath);
+    }
+
+    final treeNode = _buildTreeSync(
+      params.rootPath,
+      params.ignorePatterns,
+      null,
+    );
+    final Set<String> visibleFiles = {};
+    if (treeNode != null) {
+      void traverse(TreeNode n) {
+        if (!n.isDirectory) {
+          visibleFiles.add(n.relativePath);
+        } else {
+          for (final child in n.children) {
+            traverse(child);
+          }
+        }
+      }
+
+      traverse(treeNode);
+    }
+
+    final effectiveIncluded = params.includedFiles.toSet().intersection(
+      visibleFiles,
+    );
+    final sortedFiles = effectiveIncluded.toList()..sort();
+
+    final buffer = StringBuffer();
+    buffer.writeln('--- PROJECT CONTEXT: ${params.projectName} ---');
+    buffer.writeln('File Tree Structure:');
+    if (treeNode != null) {
+      _buildTreeStringSync(treeNode, buffer, '', effectiveIncluded);
+    }
+    buffer.writeln('--- MAIN FILE(S) CONTENT ---');
+
+    for (final fileRelPath in sortedFiles) {
+      final absolutePath = p.join(canonicalRoot, fileRelPath);
+      final file = File(absolutePath);
+
+      buffer.writeln('--- File: $fileRelPath ---');
+      try {
+        if (!file.existsSync()) {
+          buffer.writeln('<File does not exist>');
+        } else {
+          final stat = file.statSync();
+          if (stat.size > _maxFileSizeBytes) {
+            buffer.writeln(
+              '<File too large (${(stat.size / 1024 / 1024).toStringAsFixed(2)} MB)>',
+            );
+          } else {
+            final raf = file.openSync();
+            final headerBytes = raf.readSync(8192);
+            raf.closeSync();
+
+            if (_isBinaryDataSync(headerBytes)) {
+              buffer.writeln('<Binary file>');
+            } else {
+              buffer.writeln(file.readAsStringSync());
+            }
+          }
+        }
+      } catch (e) {
+        buffer.writeln('<Error reading file: $e>');
+      }
+      buffer.writeln('--- End File ---');
+    }
+
+    // Append selected Agent Skills
+    if (params.selectedSkills.isNotEmpty) {
+      buffer.writeln('--- AGENT SKILLS ---');
+      for (final skill in params.selectedSkills) {
+        buffer.writeln('--- Skill: ${skill.name} ---');
+        if (skill.description.isNotEmpty) {
+          buffer.writeln('Description: ${skill.description}');
+        }
+        if (skill.sourcePath != null && skill.sourcePath!.isNotEmpty) {
+          buffer.writeln('Source: ${skill.sourcePath}');
+        }
+        buffer.writeln(skill.content);
+
+        if (skill.references.isNotEmpty) {
+          for (final ref in skill.references) {
+            buffer.writeln('--- Skill Reference: ${ref.relativePath} ---');
+            buffer.writeln(ref.content);
+            buffer.writeln('--- End Skill Reference ---');
+          }
+        }
+
+        buffer.writeln('--- End Skill ---');
+      }
+    }
+
+    return PromptBuildResult(
+      promptText: buffer.toString(),
+      fileCount: sortedFiles.length,
+      skillCount: params.selectedSkills.length,
+    );
+  }
+
+  // Synchronous tree string builder for prompt assembly
+  static void _buildTreeStringSync(
+    TreeNode node,
+    StringBuffer buffer,
+    String prefix,
+    Set<String> included,
+  ) {
+    final children = node.children;
+    for (int i = 0; i < children.length; i++) {
+      final child = children[i];
+      final isLast = i == children.length - 1;
+      final connector = isLast ? '└── ' : '├── ';
+
+      final String selectionIndicator =
+          (!child.isDirectory && included.contains(child.relativePath))
+          ? ' [selected]'
+          : '';
+
+      buffer.writeln(
+        '$prefix$connector${child.name}${child.isDirectory ? '/' : ''}$selectionIndicator',
+      );
+      if (child.isDirectory) {
+        _buildTreeStringSync(
+          child,
+          buffer,
+          prefix + (isLast ? '    ' : '│   '),
+          included,
+        );
+      }
+    }
   }
 
   // Synchronous traversal analyzer logic designed for Isolate targets
@@ -394,6 +585,8 @@ class FsService {
       '.vscode',
     };
 
+    final Set<String> processedSkillPaths = {};
+
     void traverse(Directory currentDir) {
       try {
         final entities = currentDir.listSync(followLinks: false);
@@ -411,17 +604,16 @@ class FsService {
                   .relative(normalizedPath, from: canonicalRoot)
                   .replaceAll('\\', '/');
 
-              final bool isSkillFile =
+              final bool isMainSkillFile =
                   lowerName == 'skill.md' ||
                   lowerName == 'skills.md' ||
                   lowerName.endsWith('.prompt.md') ||
-                  relPath.contains('.github/skills/') ||
-                  relPath.contains('.claude/skills/') ||
-                  relPath.contains('.agents/skills/') ||
                   relPath.contains('.cursor/rules/') ||
-                  relPath.contains('.windsurfrules');
+                  lowerName == '.windsurfrules';
 
-              if (isSkillFile) {
+              if (isMainSkillFile && !processedSkillPaths.contains(relPath)) {
+                processedSkillPaths.add(relPath);
+
                 try {
                   final stat = entity.statSync();
                   if (stat.size <= _maxFileSizeBytes) {
@@ -431,7 +623,13 @@ class FsService {
                     String name = frontmatter['name'] ?? '';
                     if (name.isEmpty) {
                       final parentDirName = p.basename(entity.parent.path);
-                      if (lowerName == 'skill.md' && parentDirName.isNotEmpty) {
+                      if ((lowerName == 'skill.md' ||
+                              lowerName == 'skills.md') &&
+                          parentDirName.isNotEmpty &&
+                          parentDirName != 'skills' &&
+                          parentDirName != '.agents' &&
+                          parentDirName != '.github' &&
+                          parentDirName != '.claude') {
                         name = parentDirName;
                       } else {
                         name = p.basenameWithoutExtension(baseName);
@@ -443,6 +641,69 @@ class FsService {
                       description = 'Agent skill from $relPath';
                     }
 
+                    // Safely scan skill references ONLY if the skill is inside a subfolder
+                    final List<AgentSkillReference> references = [];
+                    final skillDir = entity.parent;
+                    final skillDirNorm = _normalizeDriveLetter(skillDir.path);
+
+                    if (skillDir.existsSync() &&
+                        skillDirNorm != canonicalRoot &&
+                        (lowerName == 'skill.md' || lowerName == 'skills.md')) {
+                      try {
+                        final referencesDir = Directory(
+                          p.join(skillDir.path, 'references'),
+                        );
+                        final List<FileSystemEntity> targetEntities = [];
+
+                        if (referencesDir.existsSync()) {
+                          targetEntities.addAll(
+                            referencesDir.listSync(
+                              recursive: true,
+                              followLinks: false,
+                            ),
+                          );
+                        } else {
+                          targetEntities.addAll(
+                            skillDir.listSync(followLinks: false),
+                          );
+                        }
+
+                        for (final refEntity in targetEntities) {
+                          if (refEntity is File) {
+                            final refBaseName = p
+                                .basename(refEntity.path)
+                                .toLowerCase();
+                            final refNormPath = _normalizeDriveLetter(
+                              refEntity.path,
+                            );
+                            final refRelToSkill = p
+                                .relative(refNormPath, from: skillDirNorm)
+                                .replaceAll('\\', '/');
+
+                            if (refBaseName != 'skill.md' &&
+                                refBaseName != 'skills.md' &&
+                                !refBaseName.startsWith('license') &&
+                                refBaseName != 'readme.md' &&
+                                !refBaseName.startsWith('.')) {
+                              try {
+                                final refStat = refEntity.statSync();
+                                if (refStat.size <= _maxFileSizeBytes) {
+                                  final refContent = refEntity
+                                      .readAsStringSync();
+                                  references.add(
+                                    AgentSkillReference(
+                                      relativePath: refRelToSkill,
+                                      content: refContent,
+                                    ),
+                                  );
+                                }
+                              } catch (_) {}
+                            }
+                          }
+                        }
+                      } catch (_) {}
+                    }
+
                     detected.add(
                       AgentSkill(
                         id: relPath,
@@ -451,6 +712,7 @@ class FsService {
                         content: content,
                         sourcePath: relPath,
                         isCustom: false,
+                        references: references,
                       ),
                     );
                   }
@@ -470,7 +732,7 @@ class FsService {
     return detected;
   }
 
-  /// Parses YAML frontmatter headers from markdown content without requiring external YAML dependencies.
+  /// Parses YAML frontmatter headers from markdown content without requiring external YAML libraries.
   static Map<String, String> _parseFrontmatter(String text) {
     final Map<String, String> result = {};
     final trimmed = text.trimLeft();
@@ -499,8 +761,8 @@ class FsService {
     return result;
   }
 
-  // Analyzes headers to determine if files contain binary rather than text data
-  bool _isBinaryData(Uint8List data) {
+  // Synchronous binary data evaluator
+  static bool _isBinaryDataSync(Uint8List data) {
     if (data.isEmpty) return false;
 
     int nullBytes = 0;
@@ -518,5 +780,10 @@ class FsService {
     if ((controlChars / length) > 0.1) return true;
 
     return false;
+  }
+
+  // Analyzes headers to determine if files contain binary rather than text data
+  bool _isBinaryData(Uint8List data) {
+    return _isBinaryDataSync(data);
   }
 }

@@ -1,13 +1,12 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:path/path.dart' as p;
 
-import '../models/tree_node.dart';
 import '../providers/app_state.dart';
+import '../services/fs_service.dart';
+import 'prompt_viewer_dialog.dart';
 import 'snackbar.dart';
 
-// Button that triggers directory sync-checks and copies project structure, file contents, and selected agent skills to the clipboard
+// Button that triggers background isolate prompt compilation and opens the prompt viewing menu immediately
 class GenerateButton extends ConsumerStatefulWidget {
   const GenerateButton({super.key});
 
@@ -55,11 +54,11 @@ class _GenerateButtonState extends ConsumerState<GenerateButton> {
                 ),
                 TextButton(
                   onPressed: () => Navigator.pop(context, 'copy_anyway'),
-                  child: const Text('Copy Anyway'),
+                  child: const Text('View Anyway'),
                 ),
                 FilledButton(
                   onPressed: () => Navigator.pop(context, 'refresh'),
-                  child: const Text('Refresh & Copy'),
+                  child: const Text('Refresh & View'),
                 ),
               ],
             ),
@@ -68,14 +67,14 @@ class _GenerateButtonState extends ConsumerState<GenerateButton> {
           if (actionChoice == 'refresh') {
             await ref.read(appStateControllerProvider).acknowledgeChanges();
             ref.invalidate(fileTreeProvider);
-            if (mounted) await _performCopy();
+            if (mounted) _performGeneratePrompt();
           } else if (actionChoice == 'copy_anyway') {
-            if (mounted) await _performCopy();
+            if (mounted) _performGeneratePrompt();
           }
         }
       } else {
         if (mounted) {
-          await _performCopy();
+          _performGeneratePrompt();
         }
       }
     } catch (e) {
@@ -89,135 +88,42 @@ class _GenerateButtonState extends ConsumerState<GenerateButton> {
     }
   }
 
-  // Extracts verified documents, constructs output trees, attaches selected agent skills, and copies text contents onto clipboard
-  Future<void> _performCopy() async {
+  // Immediately launches PromptViewerDialog with a background future task
+  void _performGeneratePrompt() {
     final config = ref.read(selectedConfigProvider);
     if (config == null) return;
 
     try {
-      final treeNode = await ref.read(fileTreeProvider.future);
-      if (treeNode == null) return;
-
       final fsService = ref.read(fsServiceProvider);
-      final visibleFiles = _getVisibleFiles(treeNode);
-      final effectiveIncluded = config.includedFiles.toSet().intersection(
-        visibleFiles,
-      );
 
-      if (effectiveIncluded.isEmpty) {
-        if (mounted) {
-          showErrorSnackBar(
-            context,
-            'No files selected or all selected files are ignored.',
-          );
-        }
-        return;
-      }
-
-      final buffer = StringBuffer();
-      buffer.writeln('--- PROJECT CONTEXT: ${config.name} ---');
-      buffer.writeln('File Tree Structure:');
-      _buildTreeString(treeNode, buffer, '', effectiveIncluded);
-      buffer.writeln('--- MAIN FILE(S) CONTENT ---');
-
-      final sortedFiles = effectiveIncluded.toList()..sort();
-
-      final List<String> fileContents = await Future.wait(
-        sortedFiles.map((fileRelPath) {
-          final absolutePath = p.join(config.rootPath, fileRelPath);
-          return fsService.readFile(absolutePath);
-        }),
-      );
-
-      for (int i = 0; i < sortedFiles.length; i++) {
-        final fileRelPath = sortedFiles[i];
-        final content = fileContents[i];
-        buffer.writeln('--- File: $fileRelPath ---');
-        buffer.writeln(content);
-        buffer.writeln('--- End File ---');
-      }
-
-      // Append selected Agent Skills to prompt output
       final selectedSkillIds = config.selectedSkillIds.toSet();
-      if (selectedSkillIds.isNotEmpty) {
-        final allSkills = ref.read(allProjectSkillsProvider);
-        final selectedSkills = allSkills
-            .where((s) => selectedSkillIds.contains(s.id))
-            .toList();
+      final allSkills = ref.read(allProjectSkillsProvider);
+      final selectedSkills = allSkills
+          .where((s) => selectedSkillIds.contains(s.id))
+          .toList();
 
-        if (selectedSkills.isNotEmpty) {
-          buffer.writeln('--- AGENT SKILLS ---');
-          for (final skill in selectedSkills) {
-            buffer.writeln('--- Skill: ${skill.name} ---');
-            if (skill.description.isNotEmpty) {
-              buffer.writeln('Description: ${skill.description}');
-            }
-            if (skill.sourcePath != null && skill.sourcePath!.isNotEmpty) {
-              buffer.writeln('Source: ${skill.sourcePath}');
-            }
-            buffer.writeln(skill.content);
-            buffer.writeln('--- End Skill ---');
-          }
-        }
-      }
+      final params = PromptBuildParams(
+        projectName: config.name,
+        rootPath: config.rootPath,
+        includedFiles: config.includedFiles,
+        selectedSkills: selectedSkills,
+        ignorePatterns: config.ignorePatterns,
+      );
 
-      await Clipboard.setData(ClipboardData(text: buffer.toString()));
-      if (mounted) {
-        showSuccessSnackBar(context, 'Context copied to clipboard!');
-      }
+      // Create future for background isolate prompt compilation
+      final promptFuture = fsService.buildPromptContext(params);
+
+      // Open the preview dialog IMMEDIATELY
+      showDialog(
+        context: context,
+        builder: (_) => PromptViewerDialog(
+          projectName: config.name,
+          promptFuture: promptFuture,
+        ),
+      );
     } catch (e) {
       if (mounted) {
-        showErrorSnackBar(context, 'Failed to build clipboard contents: $e');
-      }
-    }
-  }
-
-  // Traverses trees to register and compile visible relative paths
-  Set<String> _getVisibleFiles(TreeNode node) {
-    final set = <String>{};
-    void traverse(TreeNode n) {
-      if (!n.isDirectory) {
-        set.add(n.relativePath);
-      } else {
-        for (final child in n.children) {
-          traverse(child);
-        }
-      }
-    }
-
-    traverse(node);
-    return set;
-  }
-
-  // Builds structured text tree mapping outputs matching file inclusion lists
-  void _buildTreeString(
-    TreeNode node,
-    StringBuffer buffer,
-    String prefix,
-    Set<String> included,
-  ) {
-    final children = node.children;
-
-    for (int i = 0; i < children.length; i++) {
-      final child = children[i];
-      final isLast = i == children.length - 1;
-      final connector = isLast ? '└── ' : '├── ';
-
-      final String selectionIndicator =
-          (!child.isDirectory && included.contains(child.relativePath))
-          ? ' [selected]'
-          : '';
-
-      buffer.writeln(
-        '$prefix$connector${child.name}${child.isDirectory ? '/' : ''}$selectionIndicator',
-      );
-      if (child.isDirectory) {
-        _buildTreeString(
-          child,
-          buffer,
-          prefix + (isLast ? '    ' : '│   '),
-          included,
-        );
+        showErrorSnackBar(context, 'Failed to launch prompt preview: $e');
       }
     }
   }
@@ -234,8 +140,8 @@ class _GenerateButtonState extends ConsumerState<GenerateButton> {
                 color: Colors.white,
               ),
             )
-          : const Icon(Icons.copy),
-      label: Text(_isLoading ? 'Generating...' : 'Generate & Copy'),
+          : const Icon(Icons.visibility),
+      label: Text(_isLoading ? 'Generating...' : 'Generate Prompt'),
       onPressed: _isLoading ? null : _handleGenerate,
     );
   }
