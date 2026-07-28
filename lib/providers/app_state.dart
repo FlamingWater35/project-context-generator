@@ -28,6 +28,12 @@ final projectSortOptionProvider = StateProvider<ProjectSortOption>(
   (ref) => ProjectSortOption.nameAsc,
 );
 
+/// Tracks node paths currently highlighted/selected via drag or click multi-select
+final selectedNodePathsProvider = StateProvider<Set<String>>((ref) => const {});
+
+/// Tracks whether mouse dragging selection is currently active in the file tree
+final isTreeDraggingProvider = StateProvider<bool>((ref) => false);
+
 // Tracks identified disk snapshots per project ID to locate structural updates
 final projectSnapshotsProvider = StateProvider<Map<String, Set<String>>>(
   (ref) => const {},
@@ -314,6 +320,7 @@ class AppStateController {
   void selectConfig(String? id) {
     _ref.read(selectedConfigIdProvider.notifier).state = id;
     _ref.read(expansionStateProvider.notifier).state = const {};
+    _ref.read(selectedNodePathsProvider.notifier).state = const {};
 
     if (id != null) {
       _saveLastSelectedProject(id);
@@ -393,6 +400,30 @@ class AppStateController {
           .updateConfig(updated, oldName: oldName);
     } catch (e) {
       debugPrint('Failed to apply configuration variations: $e');
+    }
+  }
+
+  /// Checks (includes) multiple file relative paths at once
+  Future<void> checkFiles(Iterable<String> filePaths) async {
+    try {
+      final current = _ref.read(selectedConfigProvider);
+      if (current == null) return;
+      final set = current.includedFiles.toSet()..addAll(filePaths);
+      await updateCurrentConfig(includedFiles: set.toList());
+    } catch (e) {
+      debugPrint('Failed to check files: $e');
+    }
+  }
+
+  /// Unchecks (excludes) multiple file relative paths at once
+  Future<void> uncheckFiles(Iterable<String> filePaths) async {
+    try {
+      final current = _ref.read(selectedConfigProvider);
+      if (current == null) return;
+      final set = current.includedFiles.toSet()..removeAll(filePaths);
+      await updateCurrentConfig(includedFiles: set.toList());
+    } catch (e) {
+      debugPrint('Failed to uncheck files: $e');
     }
   }
 
@@ -543,6 +574,18 @@ class AppStateController {
       await updateCurrentConfig(ignorePatterns: set.toList());
     } catch (e) {
       debugPrint('Failed to insert target ignore rules pattern parameter: $e');
+    }
+  }
+
+  /// Appends multiple ignore rules to the configuration
+  Future<void> addIgnorePatterns(List<String> patterns) async {
+    try {
+      final current = _ref.read(selectedConfigProvider);
+      if (current == null) return;
+      final set = current.ignorePatterns.toSet()..addAll(patterns);
+      await updateCurrentConfig(ignorePatterns: set.toList());
+    } catch (e) {
+      debugPrint('Failed to add ignore patterns: $e');
     }
   }
 

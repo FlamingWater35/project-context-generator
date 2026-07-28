@@ -6,6 +6,74 @@ import 'package:flutter/services.dart';
 import '../services/fs_service.dart';
 import 'snackbar.dart';
 
+/// Custom TextEditingController that highlights search matches in the prompt text.
+class SearchHighlightController extends TextEditingController {
+  SearchHighlightController({super.text});
+
+  String _searchPattern = '';
+  int _currentMatchCharIndex = -1;
+
+  /// Updates current search query pattern and active match index for span highlighting
+  void setSearchQuery(String pattern, int currentMatchIndex) {
+    _searchPattern = pattern;
+    _currentMatchCharIndex = currentMatchIndex;
+    notifyListeners();
+  }
+
+  @override
+  TextSpan buildTextSpan({
+    required BuildContext context,
+    TextStyle? style,
+    required bool withComposing,
+  }) {
+    if (_searchPattern.isEmpty || text.isEmpty) {
+      return TextSpan(text: text, style: style);
+    }
+
+    final List<InlineSpan> children = [];
+    final String lowerText = text.toLowerCase();
+    final String lowerPattern = _searchPattern.toLowerCase();
+
+    int start = 0;
+    while (true) {
+      final int matchIndex = lowerText.indexOf(lowerPattern, start);
+      if (matchIndex == -1) {
+        children.add(TextSpan(text: text.substring(start), style: style));
+        break;
+      }
+
+      if (matchIndex > start) {
+        children.add(
+          TextSpan(text: text.substring(start, matchIndex), style: style),
+        );
+      }
+
+      final bool isCurrentMatch = matchIndex == _currentMatchCharIndex;
+      final String matchedText = text.substring(
+        matchIndex,
+        matchIndex + lowerPattern.length,
+      );
+
+      children.add(
+        TextSpan(
+          text: matchedText,
+          style: style?.copyWith(
+            backgroundColor: isCurrentMatch
+                ? Colors.orange.shade700
+                : Colors.amber.shade900.withAlpha(190),
+            color: Colors.white,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+      );
+
+      start = matchIndex + lowerPattern.length;
+    }
+
+    return TextSpan(children: children, style: style);
+  }
+}
+
 /// Section item for the quick-jump section selector in the prompt viewer.
 class _PromptSection {
   const _PromptSection({
@@ -37,7 +105,7 @@ class PromptViewerDialog extends StatefulWidget {
 class _PromptViewerDialogState extends State<PromptViewerDialog> {
   static const int _maxDisplayLines = 2000;
 
-  late final TextEditingController _textController;
+  late final SearchHighlightController _textController;
   final TextEditingController _searchController = TextEditingController();
   final ScrollController _editorScrollController = ScrollController();
   final FocusNode _editorFocusNode = FocusNode();
@@ -60,7 +128,7 @@ class _PromptViewerDialogState extends State<PromptViewerDialog> {
   @override
   void initState() {
     super.initState();
-    _textController = TextEditingController();
+    _textController = SearchHighlightController();
     _loadPrompt();
   }
 
@@ -206,10 +274,9 @@ class _PromptViewerDialogState extends State<PromptViewerDialog> {
         offset: section.charIndex,
       );
     }
-    _editorFocusNode.requestFocus();
   }
 
-  /// Searches display text for a query string and highlights matches
+  /// Searches display text for a query string and highlights matches in the prompt viewer
   void _performSearch(String query) {
     final trimmed = query.trim().toLowerCase();
     if (trimmed.isEmpty) {
@@ -217,6 +284,7 @@ class _PromptViewerDialogState extends State<PromptViewerDialog> {
         _searchMatchIndices = [];
         _currentSearchMatchIndex = -1;
       });
+      _textController.setSearchQuery('', -1);
       return;
     }
 
@@ -237,10 +305,12 @@ class _PromptViewerDialogState extends State<PromptViewerDialog> {
 
     if (matches.isNotEmpty) {
       _jumpToSearchMatch(0, trimmed.length);
+    } else {
+      _textController.setSearchQuery(trimmed, -1);
     }
   }
 
-  /// Jumps editor view and scrolls to the N-th search match
+  /// Jumps editor view and scrolls to the N-th search match while updating highlights
   void _jumpToSearchMatch(int matchIdx, int matchLength) {
     if (matchIdx >= 0 && matchIdx < _searchMatchIndices.length) {
       final charIdx = _searchMatchIndices[matchIdx];
@@ -263,8 +333,9 @@ class _PromptViewerDialogState extends State<PromptViewerDialog> {
           baseOffset: charIdx,
           extentOffset: charIdx + matchLength,
         );
+
+        _textController.setSearchQuery(_searchController.text.trim(), charIdx);
       }
-      _editorFocusNode.requestFocus();
     }
   }
 
