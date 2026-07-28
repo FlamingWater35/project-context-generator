@@ -6,7 +6,6 @@ import 'package:uuid/uuid.dart';
 
 import '../models/agent_skill.dart';
 import '../providers/app_state.dart';
-import 'smooth_scroll.dart';
 
 /// Modal dialog enabling users to detect, review, select, and define custom agent skills for context prompt generation.
 class SkillsDialog extends ConsumerStatefulWidget {
@@ -17,7 +16,7 @@ class SkillsDialog extends ConsumerStatefulWidget {
 }
 
 class _SkillsDialogState extends ConsumerState<SkillsDialog> {
-  final SmoothScrollController _scrollController = SmoothScrollController();
+  final ScrollController _scrollController = ScrollController();
 
   @override
   void dispose() {

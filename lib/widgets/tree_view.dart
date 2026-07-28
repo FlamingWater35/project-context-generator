@@ -4,7 +4,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models/tree_node.dart';
 import '../providers/app_state.dart';
 import 'file_node.dart';
-import 'smooth_scroll.dart';
 
 // Nested directory render node that renders folders and subfolders iteratively
 class _RecursiveDirectoryNode extends ConsumerWidget {
@@ -71,7 +70,7 @@ class ProjectTreeView extends ConsumerStatefulWidget {
 
 class _ProjectTreeViewState extends ConsumerState<ProjectTreeView> {
   final ScrollController _horizontalController = ScrollController();
-  final SmoothScrollController _scrollController = SmoothScrollController();
+  final ScrollController _scrollController = ScrollController();
 
   @override
   void dispose() {

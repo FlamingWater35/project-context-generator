@@ -3,7 +3,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../models/project_config.dart';
 import '../providers/app_state.dart';
-import 'smooth_scroll.dart';
 
 // Sidebar panel presenting lists of configured projects, project sorting, active project switching, and configuration creations
 class Sidebar extends ConsumerStatefulWidget {
@@ -14,7 +13,7 @@ class Sidebar extends ConsumerStatefulWidget {
 }
 
 class _SidebarState extends ConsumerState<Sidebar> {
-  final SmoothScrollController _scrollController = SmoothScrollController();
+  final ScrollController _scrollController = ScrollController();
   final TextEditingController _searchController = TextEditingController();
   String _searchQuery = '';
 

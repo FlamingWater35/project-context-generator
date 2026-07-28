@@ -5,7 +5,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../models/project_config.dart';
 import '../providers/app_state.dart';
-import 'smooth_scroll.dart';
 
 // Dialog enabling users to define and configure ignore rules using standard prebuilt chips
 class IgnoreListDialog extends ConsumerStatefulWidget {
@@ -54,10 +53,8 @@ class _IgnoreListDialogState extends ConsumerState<IgnoreListDialog> {
   late List<String> ignores;
 
   final TextEditingController _controller = TextEditingController();
-  final SmoothScrollController _presetScrollController =
-      SmoothScrollController();
-
-  final SmoothScrollController _scrollController = SmoothScrollController();
+  final ScrollController _presetScrollController = ScrollController();
+  final ScrollController _scrollController = ScrollController();
   bool _showPresets = true;
 
   @override
