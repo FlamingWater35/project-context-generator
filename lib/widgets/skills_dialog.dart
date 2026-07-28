@@ -247,108 +247,114 @@ class _SkillsDialogState extends ConsumerState<SkillsDialog> {
                     );
                   }
 
-                  return Container(
-                    decoration: BoxDecoration(
-                      border: Border.all(color: Colors.white.withAlpha(20)),
-                      borderRadius: BorderRadius.circular(8),
-                      color: Colors.black.withAlpha(15),
-                    ),
-                    child: Scrollbar(
-                      controller: _scrollController,
-                      thumbVisibility: true,
-                      child: SilkyListView.separated(
+                  return Material(
+                    color: Colors.black.withAlpha(15),
+                    borderRadius: BorderRadius.circular(8),
+                    child: Container(
+                      decoration: BoxDecoration(
+                        border: Border.all(color: Colors.white.withAlpha(20)),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Scrollbar(
                         controller: _scrollController,
-                        itemCount: allSkills.length,
-                        separatorBuilder: (ctx, i) => Divider(
-                          height: 1,
-                          color: Colors.white.withAlpha(10),
-                        ),
-                        itemBuilder: (ctx, i) {
-                          final skill = allSkills[i];
-                          final isSelected = selectedIds.contains(skill.id);
+                        thumbVisibility: true,
+                        child: SilkyListView.separated(
+                          controller: _scrollController,
+                          itemCount: allSkills.length,
+                          separatorBuilder: (ctx, i) => Divider(
+                            height: 1,
+                            color: Colors.white.withAlpha(10),
+                          ),
+                          itemBuilder: (ctx, i) {
+                            final skill = allSkills[i];
+                            final isSelected = selectedIds.contains(skill.id);
 
-                          return ListTile(
-                            dense: true,
-                            leading: Checkbox(
-                              value: isSelected,
-                              onChanged: (_) {
-                                controller.toggleSkillSelection(skill.id);
-                              },
-                            ),
-                            title: Row(
-                              children: [
-                                Flexible(
-                                  child: Text(
-                                    skill.name,
-                                    style: const TextStyle(
-                                      fontWeight: FontWeight.bold,
-                                      fontSize: 14,
-                                    ),
-                                    overflow: TextOverflow.ellipsis,
-                                  ),
-                                ),
-                                const SizedBox(width: 8),
-                                Container(
-                                  padding: const EdgeInsets.symmetric(
-                                    horizontal: 6,
-                                    vertical: 2,
-                                  ),
-                                  decoration: BoxDecoration(
-                                    color: skill.isCustom
-                                        ? Colors.purple.shade900
-                                        : Colors.blue.shade900,
-                                    borderRadius: BorderRadius.circular(4),
-                                  ),
-                                  child: Text(
-                                    skill.isCustom ? 'Custom' : 'Detected',
-                                    style: const TextStyle(
-                                      fontSize: 10,
-                                      fontWeight: FontWeight.bold,
-                                      color: Colors.white,
-                                    ),
-                                  ),
-                                ),
-                              ],
-                            ),
-                            subtitle: Text(
-                              skill.description.isNotEmpty
-                                  ? skill.description
-                                  : (skill.sourcePath ?? ''),
-                              maxLines: 2,
-                              overflow: TextOverflow.ellipsis,
-                              style: TextStyle(
-                                color: Colors.grey.shade400,
-                                fontSize: 12,
+                            return ListTile(
+                              dense: true,
+                              leading: Checkbox(
+                                value: isSelected,
+                                onChanged: (_) {
+                                  controller.toggleSkillSelection(skill.id);
+                                },
                               ),
-                            ),
-                            trailing: Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                IconButton(
-                                  icon: const Icon(Icons.visibility, size: 18),
-                                  tooltip: 'Preview Skill Content',
-                                  onPressed: () =>
-                                      _showPreviewDialog(context, skill),
+                              title: Row(
+                                children: [
+                                  Flexible(
+                                    child: Text(
+                                      skill.name,
+                                      style: const TextStyle(
+                                        fontWeight: FontWeight.bold,
+                                        fontSize: 14,
+                                      ),
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                  ),
+                                  const SizedBox(width: 8),
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 6,
+                                      vertical: 2,
+                                    ),
+                                    decoration: BoxDecoration(
+                                      color: skill.isCustom
+                                          ? Colors.purple.shade900
+                                          : Colors.blue.shade900,
+                                      borderRadius: BorderRadius.circular(4),
+                                    ),
+                                    child: Text(
+                                      skill.isCustom ? 'Custom' : 'Detected',
+                                      style: const TextStyle(
+                                        fontSize: 10,
+                                        fontWeight: FontWeight.bold,
+                                        color: Colors.white,
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              subtitle: Text(
+                                skill.description.isNotEmpty
+                                    ? skill.description
+                                    : (skill.sourcePath ?? ''),
+                                maxLines: 2,
+                                overflow: TextOverflow.ellipsis,
+                                style: TextStyle(
+                                  color: Colors.grey.shade400,
+                                  fontSize: 12,
                                 ),
-                                if (skill.isCustom)
+                              ),
+                              trailing: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
                                   IconButton(
                                     icon: const Icon(
-                                      Icons.delete,
+                                      Icons.visibility,
                                       size: 18,
-                                      color: Colors.redAccent,
                                     ),
-                                    tooltip: 'Delete Custom Skill',
-                                    onPressed: () {
-                                      controller.deleteCustomSkill(skill.id);
-                                    },
+                                    tooltip: 'Preview Skill Content',
+                                    onPressed: () =>
+                                        _showPreviewDialog(context, skill),
                                   ),
-                              ],
-                            ),
-                            onTap: () {
-                              controller.toggleSkillSelection(skill.id);
-                            },
-                          );
-                        },
+                                  if (skill.isCustom)
+                                    IconButton(
+                                      icon: const Icon(
+                                        Icons.delete,
+                                        size: 18,
+                                        color: Colors.redAccent,
+                                      ),
+                                      tooltip: 'Delete Custom Skill',
+                                      onPressed: () {
+                                        controller.deleteCustomSkill(skill.id);
+                                      },
+                                    ),
+                                ],
+                              ),
+                              onTap: () {
+                                controller.toggleSkillSelection(skill.id);
+                              },
+                            );
+                          },
+                        ),
                       ),
                     ),
                   );

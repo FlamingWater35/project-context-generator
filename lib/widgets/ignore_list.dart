@@ -148,47 +148,50 @@ class _IgnoreListDialogState extends ConsumerState<IgnoreListDialog> {
                   ),
                   const SizedBox(height: 16),
                   Expanded(
-                    child: Container(
-                      decoration: BoxDecoration(
-                        border: Border.all(color: Colors.white.withAlpha(20)),
-                        borderRadius: BorderRadius.circular(8),
-                        color: Colors.black.withAlpha(10),
-                      ),
-                      child: ignores.isEmpty
-                          ? Center(
-                              child: Text(
-                                'No active ignore patterns.',
-                                style: TextStyle(color: Colors.grey.shade600),
-                              ),
-                            )
-                          : Scrollbar(
-                              controller: _scrollController,
-                              thumbVisibility: true,
-                              child: SilkyListView.separated(
-                                controller: _scrollController,
-                                padding: EdgeInsets.zero,
-                                itemCount: ignores.length,
-                                separatorBuilder: (ctx, i) => Divider(
-                                  height: 1,
-                                  color: Colors.white.withAlpha(10),
+                    child: Material(
+                      color: Colors.black.withAlpha(10),
+                      borderRadius: BorderRadius.circular(8),
+                      child: Container(
+                        decoration: BoxDecoration(
+                          border: Border.all(color: Colors.white.withAlpha(20)),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: ignores.isEmpty
+                            ? Center(
+                                child: Text(
+                                  'No active ignore patterns.',
+                                  style: TextStyle(color: Colors.grey.shade600),
                                 ),
-                                itemBuilder: (ctx, i) => ListTile(
-                                  dense: true,
-                                  title: Text(
-                                    ignores[i],
-                                    style: const TextStyle(
-                                      fontFamily: 'monospace',
-                                      fontSize: 13,
+                              )
+                            : Scrollbar(
+                                controller: _scrollController,
+                                thumbVisibility: true,
+                                child: SilkyListView.separated(
+                                  controller: _scrollController,
+                                  padding: EdgeInsets.zero,
+                                  itemCount: ignores.length,
+                                  separatorBuilder: (ctx, i) => Divider(
+                                    height: 1,
+                                    color: Colors.white.withAlpha(10),
+                                  ),
+                                  itemBuilder: (ctx, i) => ListTile(
+                                    dense: true,
+                                    title: Text(
+                                      ignores[i],
+                                      style: const TextStyle(
+                                        fontFamily: 'monospace',
+                                        fontSize: 13,
+                                      ),
+                                    ),
+                                    trailing: IconButton(
+                                      icon: const Icon(Icons.close, size: 16),
+                                      onPressed: () =>
+                                          setState(() => ignores.removeAt(i)),
                                     ),
                                   ),
-                                  trailing: IconButton(
-                                    icon: const Icon(Icons.close, size: 16),
-                                    onPressed: () =>
-                                        setState(() => ignores.removeAt(i)),
-                                  ),
                                 ),
                               ),
-                            ),
+                      ),
                     ),
                   ),
                 ],
