@@ -160,19 +160,22 @@ class _GenerateButtonState extends ConsumerState<GenerateButton> {
 
   @override
   Widget build(BuildContext context) {
-    return FilledButton.icon(
-      icon: _isLoading
-          ? const SizedBox(
-              width: 16,
-              height: 16,
-              child: CircularProgressIndicator(
-                strokeWidth: 2,
-                color: Colors.white,
-              ),
-            )
-          : const Icon(Icons.copy),
-      label: Text(_isLoading ? 'Generating...' : 'Generate & Copy'),
-      onPressed: _isLoading ? null : _handleGenerate,
+    return Tooltip(
+      message: 'Generate & Copy Prompt (Ctrl+G / Cmd+G)',
+      child: FilledButton.icon(
+        icon: _isLoading
+            ? const SizedBox(
+                width: 16,
+                height: 16,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2,
+                  color: Colors.white,
+                ),
+              )
+            : const Icon(Icons.copy),
+        label: Text(_isLoading ? 'Generating...' : 'Generate & Copy'),
+        onPressed: _isLoading ? null : _handleGenerate,
+      ),
     );
   }
 }

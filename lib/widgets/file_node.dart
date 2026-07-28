@@ -15,6 +15,14 @@ class FileNodeWidget extends ConsumerWidget {
   final Set<String> activeParentDirectories;
   final FlatTreeItem item;
 
+  /// Helper escaping glob syntax special characters to prevent invalid pattern matching.
+  String _escapeGlob(String path) {
+    return path.replaceAllMapped(
+      RegExp(r'([\[\]\{\}\*\?\!\(\)])'),
+      (match) => '\\${match[0]}',
+    );
+  }
+
   /// Helper evaluating file extension or folder type to return distinct visual icons.
   Widget _buildNodeIcon(
     BuildContext context,
@@ -99,7 +107,7 @@ class FileNodeWidget extends ConsumerWidget {
     ref.read(selectedNodePathsProvider.notifier).state = selectedPaths;
   }
 
-  /// Opens explicit ignore options popup menu.
+  /// Opens explicit ignore options popup menu with escaped glob syntax.
   void _showIgnoreOptionsMenu(
     BuildContext context,
     WidgetRef ref,
@@ -109,10 +117,13 @@ class FileNodeWidget extends ConsumerWidget {
     final node = item.node;
     final List<PopupMenuEntry<String>> items = [];
 
+    final escapedRelative = _escapeGlob(node.relativePath);
+    final escapedName = _escapeGlob(node.name);
+
     if (node.isDirectory) {
       items.addAll([
         PopupMenuItem<String>(
-          value: '${node.relativePath}/**',
+          value: '$escapedRelative/**',
           child: Row(
             children: [
               const Icon(Icons.folder, size: 20, color: Colors.amber),
@@ -124,7 +135,7 @@ class FileNodeWidget extends ConsumerWidget {
           ),
         ),
         PopupMenuItem<String>(
-          value: '**/${node.name}/**',
+          value: '**/$escapedName/**',
           child: Row(
             children: [
               const Icon(Icons.folder_copy, size: 20, color: Colors.amber),
@@ -137,7 +148,7 @@ class FileNodeWidget extends ConsumerWidget {
     } else {
       items.addAll([
         PopupMenuItem<String>(
-          value: node.relativePath,
+          value: escapedRelative,
           child: Row(
             children: [
               const Icon(Icons.insert_drive_file, size: 20, color: Colors.blue),
@@ -147,7 +158,7 @@ class FileNodeWidget extends ConsumerWidget {
           ),
         ),
         PopupMenuItem<String>(
-          value: '**/${node.name}',
+          value: '**/$escapedName',
           child: Row(
             children: [
               const Icon(Icons.file_copy, size: 20, color: Colors.blue),
@@ -161,9 +172,10 @@ class FileNodeWidget extends ConsumerWidget {
       final dotIdx = node.name.lastIndexOf('.');
       if (dotIdx > 0 && dotIdx < node.name.length - 1) {
         final ext = node.name.substring(dotIdx);
+        final escapedExt = _escapeGlob(ext);
         items.add(
           PopupMenuItem<String>(
-            value: '*$ext',
+            value: '*$escapedExt',
             child: Row(
               children: [
                 const Icon(

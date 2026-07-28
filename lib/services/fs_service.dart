@@ -108,8 +108,7 @@ class _IgnoreRule {
       } else {
         if (!onlyDirs) {
           rootGlob = Glob(basePattern, context: p.posix);
-          nestedGlob =
-              null; // Do NOT match nested paths for root-anchored rules
+          nestedGlob = null;
         }
         dirGlob = Glob('$basePattern/**', context: p.posix);
         pruneGlob = Glob(basePattern, context: p.posix);
@@ -160,6 +159,12 @@ class FsService {
       return path[0].toUpperCase() + path.substring(1);
     }
     return path;
+  }
+
+  /// Returns absolute normalized canonical root path without un-resolving symlinks inconsistently.
+  static String _getCanonicalRootPath(String rootPath) {
+    final normalized = p.normalize(p.absolute(rootPath));
+    return _normalizeDriveLetter(normalized);
   }
 
   /// Performs folder file discovery on an external Isolate to prevent UI lockups.
@@ -223,7 +228,7 @@ class FsService {
     }
   }
 
-  /// Synchronous prompt assembly logic designed for background Isolate targets.
+  /// Synchronous prompt assembly logic optimized for Isolate execution with zero string array splitting.
   static PromptBuildResult _buildPromptContextSync(PromptBuildParams params) {
     final rootDir = Directory(params.rootPath);
     if (!rootDir.existsSync()) {
@@ -238,12 +243,7 @@ class FsService {
       );
     }
 
-    String canonicalRoot;
-    try {
-      canonicalRoot = _normalizeDriveLetter(rootDir.resolveSymbolicLinksSync());
-    } catch (_) {
-      canonicalRoot = _normalizeDriveLetter(params.rootPath);
-    }
+    final canonicalRoot = _getCanonicalRootPath(params.rootPath);
 
     final treeNode = _buildTreeSync(
       params.rootPath,
@@ -269,18 +269,9 @@ class FsService {
       visibleFiles,
     );
     final sortedFiles = effectiveIncluded.toList()..sort();
-    final List<PromptSectionData> sections = [];
 
     final buffer = StringBuffer();
     buffer.writeln('--- PROJECT CONTEXT: ${params.projectName} ---');
-
-    sections.add(
-      PromptSectionData(
-        title: 'File Tree Structure',
-        charIndex: buffer.length,
-        iconType: 'tree',
-      ),
-    );
     buffer.writeln('File Tree Structure:');
     if (treeNode != null) {
       _buildTreeStringSync(treeNode, buffer, '', effectiveIncluded);
@@ -288,14 +279,6 @@ class FsService {
     buffer.writeln('--- MAIN FILE(S) CONTENT ---');
 
     for (final fileRelPath in sortedFiles) {
-      sections.add(
-        PromptSectionData(
-          title: 'File: $fileRelPath',
-          charIndex: buffer.length,
-          iconType: 'file',
-        ),
-      );
-
       final absolutePath = p.join(canonicalRoot, fileRelPath);
       final file = File(absolutePath);
 
@@ -328,23 +311,9 @@ class FsService {
     }
 
     if (params.selectedSkills.isNotEmpty) {
-      sections.add(
-        PromptSectionData(
-          title: 'Agent Skills Section',
-          charIndex: buffer.length,
-          iconType: 'skills',
-        ),
-      );
       buffer.writeln('--- AGENT SKILLS ---');
 
       for (final skill in params.selectedSkills) {
-        sections.add(
-          PromptSectionData(
-            title: 'Skill: ${skill.name}',
-            charIndex: buffer.length,
-            iconType: 'skill',
-          ),
-        );
         buffer.writeln('--- Skill: ${skill.name} ---');
         if (skill.description.isNotEmpty) {
           buffer.writeln('Description: ${skill.description}');
@@ -367,32 +336,24 @@ class FsService {
     }
 
     final fullText = buffer.toString();
-    final lines = fullText.split('\n');
-    final totalLines = lines.length;
-    bool isTruncated = false;
-    String displayText = fullText;
-    List<PromptSectionData> effectiveSections = sections;
 
-    if (totalLines > 2000) {
-      isTruncated = true;
-      final previewLinesStr = lines.take(2000).join('\n');
-      final previewCharCount = previewLinesStr.length;
-      displayText =
-          '$previewLinesStr\n\n--- [PREVIEW TRUNCATED: Showing first 2000 of $totalLines lines. Click "Generate & Copy" to copy 100% of context] ---';
-
-      effectiveSections = sections
-          .where((sec) => sec.charIndex < previewCharCount)
-          .toList();
+    // Single-pass line counting avoids allocating multi-megabyte String arrays
+    int totalLines = 1;
+    final len = fullText.length;
+    for (int i = 0; i < len; i++) {
+      if (fullText.codeUnitAt(i) == 10) {
+        totalLines++;
+      }
     }
 
     return PromptBuildResult(
       promptText: fullText,
-      displayText: displayText,
+      displayText: fullText,
       fileCount: sortedFiles.length,
       skillCount: params.selectedSkills.length,
       totalLines: totalLines,
-      sections: effectiveSections,
-      isTruncated: isTruncated,
+      sections: const [],
+      isTruncated: false,
     );
   }
 
@@ -440,15 +401,8 @@ class FsService {
     final dir = Directory(rootPath);
     if (!dir.existsSync()) return paths;
 
-    String canonicalRoot;
-    Directory canonicalDir;
-    try {
-      canonicalRoot = _normalizeDriveLetter(dir.resolveSymbolicLinksSync());
-      canonicalDir = Directory(canonicalRoot);
-    } catch (_) {
-      canonicalRoot = _normalizeDriveLetter(rootPath);
-      canonicalDir = dir;
-    }
+    final canonicalRoot = _getCanonicalRootPath(rootPath);
+    final canonicalDir = Directory(canonicalRoot);
 
     void traverse(Directory currentDir) {
       try {
@@ -503,15 +457,8 @@ class FsService {
     final dir = Directory(rootPath);
     if (!dir.existsSync()) return null;
 
-    String canonicalRoot;
-    Directory canonicalDir;
-    try {
-      canonicalRoot = _normalizeDriveLetter(dir.resolveSymbolicLinksSync());
-      canonicalDir = Directory(canonicalRoot);
-    } catch (_) {
-      canonicalRoot = _normalizeDriveLetter(rootPath);
-      canonicalDir = dir;
-    }
+    final canonicalRoot = _getCanonicalRootPath(rootPath);
+    final canonicalDir = Directory(canonicalRoot);
 
     final rules = ignorePatterns
         .map((pattern) => _IgnoreRule(pattern))
@@ -602,12 +549,7 @@ class FsService {
     final dir = Directory(rootPath);
     if (!dir.existsSync()) return detected;
 
-    String canonicalRoot;
-    try {
-      canonicalRoot = _normalizeDriveLetter(dir.resolveSymbolicLinksSync());
-    } catch (_) {
-      canonicalRoot = _normalizeDriveLetter(rootPath);
-    }
+    final canonicalRoot = _getCanonicalRootPath(rootPath);
 
     final Set<String> ignoreFolders = {
       '.git',

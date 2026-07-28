@@ -47,7 +47,7 @@ final configsProvider =
       return ConfigsNotifier(ref, ref.watch(configServiceProvider));
     });
 
-/// State notifier orchestrating background actions on system configurations.
+/// State notifier orchestrating background actions on system configurations with thread safety.
 class ConfigsNotifier extends StateNotifier<List<ProjectConfig>> {
   ConfigsNotifier(this._ref, this._configService) : super(const []) {
     _load();
@@ -72,7 +72,7 @@ class ConfigsNotifier extends StateNotifier<List<ProjectConfig>> {
     }
   }
 
-  /// Defers and serializes target state parameters using a map to avoid data loss during rapid project edits.
+  /// Defers and serializes target state parameters using a queue to prevent race conditions during rapid edits.
   void updateConfig(ProjectConfig config, {String? oldName}) {
     state = [
       for (final c in state)
@@ -90,27 +90,28 @@ class ConfigsNotifier extends StateNotifier<List<ProjectConfig>> {
     });
   }
 
-  /// Executes synchronous file writes for all queued project configurations.
-  void _savePending() {
+  /// Executes sequential file writes for all queued project configurations safely.
+  Future<void> _savePending() async {
     if (_pendingConfigs.isNotEmpty) {
-      for (final entry in _pendingConfigs.entries) {
+      final entries = List.of(_pendingConfigs.entries);
+      _pendingConfigs.clear();
+
+      for (final entry in entries) {
         try {
-          final oldName = _pendingOldNames[entry.key];
-          _configService.saveConfig(entry.value, oldName: oldName);
+          final oldName = _pendingOldNames.remove(entry.key);
+          await _configService.saveConfig(entry.value, oldName: oldName);
         } catch (e) {
           debugPrint('Failure flushing config ${entry.key}: $e');
         }
       }
-      _pendingConfigs.clear();
-      _pendingOldNames.clear();
     }
     _saveTimer?.cancel();
     _saveTimer = null;
   }
 
-  /// Instantly commits and saves queued configurations on application shutdown.
-  void flush() {
-    _savePending();
+  /// Instantly commits and awaits queued configurations on application shutdown.
+  Future<void> flush() async {
+    await _savePending();
   }
 
   /// Removes a configuration metadata record and cleans associated disk assets.
@@ -120,11 +121,16 @@ class ConfigsNotifier extends StateNotifier<List<ProjectConfig>> {
       _pendingOldNames.remove(config.id);
 
       await _configService.deleteConfig(config);
-      state = state.where((c) => c.id != config.id).toList();
+
+      // Update state first before updating active selection fallback logic
+      final updatedList = state.where((c) => c.id != config.id).toList();
+      state = updatedList;
 
       final currentSelectedId = _ref.read(selectedConfigIdProvider);
       if (currentSelectedId == config.id) {
-        final newSelected = state.isNotEmpty ? state.first.id : null;
+        final newSelected = updatedList.isNotEmpty
+            ? updatedList.first.id
+            : null;
         _ref.read(appStateControllerProvider).selectConfig(newSelected);
       }
 
@@ -216,6 +222,20 @@ final selectedIncludedFilesSetProvider = Provider<Set<String>>((ref) {
   return config.includedFiles.toSet();
 });
 
+/// Precomputes active parent directory relative paths containing included files in O(N).
+final activeParentDirectoriesProvider = Provider<Set<String>>((ref) {
+  final includedSet = ref.watch(selectedIncludedFilesSetProvider);
+  final Set<String> activeParents = {};
+  for (final fileRelPath in includedSet) {
+    int idx = fileRelPath.lastIndexOf('/');
+    while (idx != -1) {
+      activeParents.add(fileRelPath.substring(0, idx));
+      idx = fileRelPath.lastIndexOf('/', idx - 1);
+    }
+  }
+  return activeParents;
+});
+
 /// Private helper to capture identical properties and compare changes across scans.
 class _TreeConfig {
   const _TreeConfig(this.configId, this.rootPath, this.ignorePatterns);
@@ -271,7 +291,6 @@ final fileTreeProvider = FutureProvider<TreeNode?>((ref) async {
 
     if (!mounted || treeNode == null) return treeNode;
 
-    // Single-pass optimization: extract paths directly from built tree if snapshot was missing
     if (knownPaths == null) {
       knownPaths = treeNode.getAllRelativePaths();
       final configService = ref.read(configServiceProvider);
@@ -299,13 +318,17 @@ final fileTreeProvider = FutureProvider<TreeNode?>((ref) async {
   }
 });
 
-/// Computes prompt statistics in background isolate for live display in bottom status bar with short debounce.
+/// Computes prompt statistics in background isolate with proper cancellation handling and debouncing.
 final promptStatsProvider = FutureProvider<PromptBuildResult?>((ref) async {
+  bool isCancelled = false;
+  ref.onDispose(() => isCancelled = true);
+
   final config = ref.watch(selectedConfigProvider);
   if (config == null || config.rootPath.isEmpty) return null;
 
   // Debounce statistical calculation calls to avoid spawning excessive Isolates during rapid toggles
-  await Future.delayed(const Duration(milliseconds: 150));
+  await Future.delayed(const Duration(milliseconds: 200));
+  if (isCancelled) return null;
 
   final selectedSkillIds = config.selectedSkillIds.toSet();
   final allSkills = ref.read(allProjectSkillsProvider);
@@ -323,7 +346,10 @@ final promptStatsProvider = FutureProvider<PromptBuildResult?>((ref) async {
     ignorePatterns: config.ignorePatterns,
   );
 
-  return await fsService.buildPromptContext(params);
+  final result = await fsService.buildPromptContext(params);
+  if (isCancelled) return null;
+
+  return result;
 });
 
 /// App-wide provider containing high-level directory structural modifiers.
@@ -443,7 +469,7 @@ class AppStateController {
     }
   }
 
-  /// Includes multiple file or directory relative paths at once, expanding directory paths recursively.
+  /// Includes multiple file or directory relative paths at once and resets multi-select state.
   Future<void> checkFiles(Iterable<String> paths) async {
     try {
       final current = _ref.read(selectedConfigProvider);
@@ -451,12 +477,13 @@ class AppStateController {
       final expandedFilePaths = _expandPathsToFiles(paths);
       final set = current.includedFiles.toSet()..addAll(expandedFilePaths);
       await updateCurrentConfig(includedFiles: set.toList());
+      _ref.read(selectedNodePathsProvider.notifier).state = const {};
     } catch (e) {
       debugPrint('Failed to check files: $e');
     }
   }
 
-  /// Unchecks multiple file or directory relative paths at once.
+  /// Unchecks multiple file or directory relative paths at once and resets multi-select state.
   Future<void> uncheckFiles(Iterable<String> paths) async {
     try {
       final current = _ref.read(selectedConfigProvider);
@@ -464,6 +491,7 @@ class AppStateController {
       final expandedFilePaths = _expandPathsToFiles(paths);
       final set = current.includedFiles.toSet()..removeAll(expandedFilePaths);
       await updateCurrentConfig(includedFiles: set.toList());
+      _ref.read(selectedNodePathsProvider.notifier).state = const {};
     } catch (e) {
       debugPrint('Failed to uncheck files: $e');
     }
@@ -616,32 +644,25 @@ class AppStateController {
     }
   }
 
-  /// Appends multiple ignore rules to the configuration, automatically formatting directory paths.
+  /// Appends multiple ignore rules using fast path lookup and resets multi-select highlights.
   Future<void> addIgnorePatterns(List<String> paths) async {
     try {
       final current = _ref.read(selectedConfigProvider);
       if (current == null) return;
       final treeNode = _ref.read(fileTreeProvider).value;
 
+      final Map<String, TreeNode> pathMap = {};
+      if (treeNode != null) {
+        treeNode.buildPathMap(pathMap);
+      }
+
       final Set<String> formattedPatterns = {};
       for (final p in paths) {
-        bool isDir = false;
-        if (treeNode != null) {
-          TreeNode? find(TreeNode n) {
-            if (n.relativePath == p) return n;
-            for (final c in n.children) {
-              final res = find(c);
-              if (res != null) return res;
-            }
-            return null;
-          }
-
-          final match = find(treeNode);
-          if (match != null && match.isDirectory) isDir = true;
-        }
+        final match = pathMap[p];
+        final bool isDir = match?.isDirectory ?? false;
 
         if (isDir) {
-          formattedPatterns.add('$p/**');
+          formattedPatterns.add(p.endsWith('/**') ? p : '$p/**');
         } else {
           formattedPatterns.add(p);
         }
@@ -649,6 +670,7 @@ class AppStateController {
 
       final set = current.ignorePatterns.toSet()..addAll(formattedPatterns);
       await updateCurrentConfig(ignorePatterns: set.toList());
+      _ref.read(selectedNodePathsProvider.notifier).state = const {};
     } catch (e) {
       debugPrint('Failed to add ignore patterns: $e');
     }

@@ -10,7 +10,7 @@ import 'package:window_manager/window_manager.dart';
 import 'providers/app_state.dart';
 import 'screens/home_screen.dart';
 
-// Entry point initialization of global app layout, window sizes, and state providers
+/// Entry point initialization of global app layout, window sizes, and state providers.
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
@@ -84,7 +84,7 @@ void main() async {
   runApp(const ProviderScope(child: ProjectContextGeneratorApp()));
 }
 
-// Global root container that manages window close listeners and theme parameters
+/// Global root container that manages window close listeners and theme parameters.
 class ProjectContextGeneratorApp extends ConsumerStatefulWidget {
   const ProjectContextGeneratorApp({super.key});
 
@@ -117,7 +117,8 @@ class _ProjectContextGeneratorAppState
     }
 
     try {
-      ref.read(configsProvider.notifier).flush();
+      // Await pending configuration flushes to ensure full disk persistence before exit
+      await ref.read(configsProvider.notifier).flush();
     } catch (e) {
       debugPrint('Failed to save pending configurations before exit: $e');
     }

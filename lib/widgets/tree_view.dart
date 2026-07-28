@@ -55,15 +55,8 @@ class _ProjectTreeViewState extends ConsumerState<ProjectTreeView> {
     final selectedPaths = ref.watch(selectedNodePathsProvider);
     final controller = ref.read(appStateControllerProvider);
 
-    // Precompute active parent directory paths containing checked files in O(N) for O(1) row rendering
-    final includedSet = ref.watch(selectedIncludedFilesSetProvider);
-    final Set<String> activeParentDirectories = {};
-    for (final fileRelPath in includedSet) {
-      final parts = fileRelPath.split('/');
-      for (int i = 1; i < parts.length; i++) {
-        activeParentDirectories.add(parts.sublist(0, i).join('/'));
-      }
-    }
+    // Watch precomputed active parent directories provider to prevent UI-thread string recalculations
+    final activeParentDirectories = ref.watch(activeParentDirectoriesProvider);
 
     return AnimatedSwitcher(
       duration: const Duration(milliseconds: 300),
@@ -161,8 +154,6 @@ class _ProjectTreeViewState extends ConsumerState<ProjectTreeView> {
                         label: const Text('Ignore Selected'),
                         onPressed: () {
                           controller.addIgnorePatterns(selectedPaths.toList());
-                          ref.read(selectedNodePathsProvider.notifier).state =
-                              const {};
                         },
                       ),
                       const SizedBox(width: 8),
