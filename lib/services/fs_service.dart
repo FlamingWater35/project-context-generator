@@ -25,17 +25,38 @@ class PromptBuildParams {
   final List<AgentSkill> selectedSkills;
 }
 
+/// Data model representing a parsed section within the generated prompt text.
+class PromptSectionData {
+  const PromptSectionData({
+    required this.title,
+    required this.charIndex,
+    required this.iconType,
+  });
+
+  final int charIndex;
+  final String iconType; // 'tree', 'file', 'skills', 'skill'
+  final String title;
+}
+
 /// Output parameters produced from background Isolate prompt assembly.
 class PromptBuildResult {
   const PromptBuildResult({
     required this.promptText,
+    required this.displayText,
     required this.fileCount,
     required this.skillCount,
+    required this.totalLines,
+    required this.sections,
+    required this.isTruncated,
   });
 
+  final String displayText;
   final int fileCount;
+  final bool isTruncated;
   final String promptText;
+  final List<PromptSectionData> sections;
   final int skillCount;
+  final int totalLines;
 }
 
 // Helper evaluating pattern structures to parse files matching ignore lists
@@ -179,8 +200,12 @@ class FsService {
       debugPrint('Background Isolate prompt construction failed: $e');
       return const PromptBuildResult(
         promptText: 'Error generating prompt context.',
+        displayText: 'Error generating prompt context.',
         fileCount: 0,
         skillCount: 0,
+        totalLines: 1,
+        sections: [],
+        isTruncated: false,
       );
     }
   }
@@ -247,8 +272,12 @@ class FsService {
     if (!rootDir.existsSync()) {
       return const PromptBuildResult(
         promptText: 'Root directory does not exist.',
+        displayText: 'Root directory does not exist.',
         fileCount: 0,
         skillCount: 0,
+        totalLines: 1,
+        sections: [],
+        isTruncated: false,
       );
     }
 
@@ -283,9 +312,18 @@ class FsService {
       visibleFiles,
     );
     final sortedFiles = effectiveIncluded.toList()..sort();
+    final List<PromptSectionData> sections = [];
 
     final buffer = StringBuffer();
     buffer.writeln('--- PROJECT CONTEXT: ${params.projectName} ---');
+
+    sections.add(
+      PromptSectionData(
+        title: 'File Tree Structure',
+        charIndex: buffer.length,
+        iconType: 'tree',
+      ),
+    );
     buffer.writeln('File Tree Structure:');
     if (treeNode != null) {
       _buildTreeStringSync(treeNode, buffer, '', effectiveIncluded);
@@ -293,6 +331,14 @@ class FsService {
     buffer.writeln('--- MAIN FILE(S) CONTENT ---');
 
     for (final fileRelPath in sortedFiles) {
+      sections.add(
+        PromptSectionData(
+          title: 'File: $fileRelPath',
+          charIndex: buffer.length,
+          iconType: 'file',
+        ),
+      );
+
       final absolutePath = p.join(canonicalRoot, fileRelPath);
       final file = File(absolutePath);
 
@@ -326,8 +372,23 @@ class FsService {
 
     // Append selected Agent Skills
     if (params.selectedSkills.isNotEmpty) {
+      sections.add(
+        PromptSectionData(
+          title: 'Agent Skills Section',
+          charIndex: buffer.length,
+          iconType: 'skills',
+        ),
+      );
       buffer.writeln('--- AGENT SKILLS ---');
+
       for (final skill in params.selectedSkills) {
+        sections.add(
+          PromptSectionData(
+            title: 'Skill: ${skill.name}',
+            charIndex: buffer.length,
+            iconType: 'skill',
+          ),
+        );
         buffer.writeln('--- Skill: ${skill.name} ---');
         if (skill.description.isNotEmpty) {
           buffer.writeln('Description: ${skill.description}');
@@ -349,10 +410,34 @@ class FsService {
       }
     }
 
+    final fullText = buffer.toString();
+    final lines = fullText.split('\n');
+    final totalLines = lines.length;
+    bool isTruncated = false;
+    String displayText = fullText;
+    List<PromptSectionData> effectiveSections = sections;
+
+    if (totalLines > 2000) {
+      isTruncated = true;
+      final previewLinesStr = lines.take(2000).join('\n');
+      final previewCharCount = previewLinesStr.length;
+      displayText =
+          '$previewLinesStr\n\n--- [PREVIEW TRUNCATED: Showing first 2000 of $totalLines lines. Click "Copy Full Prompt" to copy 100% of context] ---';
+
+      // Filter sections to include ONLY those present in the displayed preview
+      effectiveSections = sections
+          .where((sec) => sec.charIndex < previewCharCount)
+          .toList();
+    }
+
     return PromptBuildResult(
-      promptText: buffer.toString(),
+      promptText: fullText,
+      displayText: displayText,
       fileCount: sortedFiles.length,
       skillCount: params.selectedSkills.length,
+      totalLines: totalLines,
+      sections: effectiveSections,
+      isTruncated: isTruncated,
     );
   }
 

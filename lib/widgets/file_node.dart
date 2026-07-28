@@ -170,6 +170,7 @@ class FileNodeWidget extends ConsumerWidget {
 
     final selectedPaths = ref.watch(selectedNodePathsProvider);
     final isHighlighted = selectedPaths.contains(node.relativePath);
+    final bool isMultiSelectActive = selectedPaths.isNotEmpty;
 
     final includedSet = ref.watch(selectedIncludedFilesSetProvider);
     final isIncluded =
@@ -182,20 +183,29 @@ class FileNodeWidget extends ConsumerWidget {
     return GestureDetector(
       onLongPress: () => _toggleMultiSelect(ref),
       onSecondaryTapDown: (details) {
-        if (!selectedPaths.contains(node.relativePath)) {
-          ref.read(selectedNodePathsProvider.notifier).state = {
-            node.relativePath,
-          };
+        if (isMultiSelectActive) {
+          _toggleMultiSelect(ref);
+        } else {
+          if (!selectedPaths.contains(node.relativePath)) {
+            ref.read(selectedNodePathsProvider.notifier).state = {
+              node.relativePath,
+            };
+          }
+          _showIgnoreOptionsMenu(context, ref, details.globalPosition);
         }
-        _showIgnoreOptionsMenu(context, ref, details.globalPosition);
       },
       child: InkWell(
         borderRadius: BorderRadius.circular(4),
         onTap: () {
-          if (node.isDirectory) {
-            controller.toggleNodeExpanded(node.relativePath);
+          if (isMultiSelectActive) {
+            // Tapping row in multi-select mode toggles multi-select inclusion
+            _toggleMultiSelect(ref);
           } else {
-            controller.toggleFile(node.relativePath, !isIncluded);
+            if (node.isDirectory) {
+              controller.toggleNodeExpanded(node.relativePath);
+            } else {
+              controller.toggleFile(node.relativePath, !isIncluded);
+            }
           }
         },
         onLongPress: () => _toggleMultiSelect(ref),
@@ -221,8 +231,10 @@ class FileNodeWidget extends ConsumerWidget {
                     curve: Curves.easeInOut,
                     child: const Icon(Icons.keyboard_arrow_right, size: 20),
                   ),
-                  onPressed: () =>
-                      controller.toggleNodeExpanded(node.relativePath),
+                  // Expand/collapse disabled when in multi-select mode
+                  onPressed: isMultiSelectActive
+                      ? null
+                      : () => controller.toggleNodeExpanded(node.relativePath),
                   padding: EdgeInsets.zero,
                   constraints: const BoxConstraints(),
                   color: hasIncluded ? null : Colors.grey.shade600,
@@ -234,11 +246,14 @@ class FileNodeWidget extends ConsumerWidget {
                 Checkbox(
                   visualDensity: VisualDensity.compact,
                   value: isIncluded,
-                  onChanged: (val) {
-                    if (val != null) {
-                      controller.toggleFile(node.relativePath, val);
-                    }
-                  },
+                  // Single file check/uncheck disabled when in multi-select mode
+                  onChanged: isMultiSelectActive
+                      ? null
+                      : (val) {
+                          if (val != null) {
+                            controller.toggleFile(node.relativePath, val);
+                          }
+                        },
                 ),
 
               Icon(
@@ -289,15 +304,20 @@ class FileNodeWidget extends ConsumerWidget {
                 ),
               ),
 
-              // Folder Selection Actions Dropdown Menu
+              // Folder Selection Actions Dropdown Menu (Disabled in multi-select mode)
               if (node.isDirectory)
                 PopupMenuButton<String>(
                   icon: Icon(
                     Icons.done_all,
                     size: 18,
-                    color: Colors.grey.shade500,
+                    color: isMultiSelectActive
+                        ? Colors.grey.shade700
+                        : Colors.grey.shade500,
                   ),
-                  tooltip: 'Folder File Selection Options',
+                  tooltip: isMultiSelectActive
+                      ? 'Selection options disabled in multi-select mode'
+                      : 'Folder File Selection Options',
+                  enabled: !isMultiSelectActive,
                   onSelected: (action) {
                     if (action == 'select_all') {
                       controller.selectAll(node);
@@ -345,7 +365,7 @@ class FileNodeWidget extends ConsumerWidget {
                   ],
                 ),
 
-              // Multi-select Highlight Toggle Button
+              // Multi-select Highlight Toggle Button (Always enabled)
               IconButton(
                 icon: Icon(
                   isHighlighted
@@ -362,22 +382,29 @@ class FileNodeWidget extends ConsumerWidget {
                 onPressed: () => _toggleMultiSelect(ref),
               ),
 
-              // Ignore Options Dropdown Button
+              // Ignore Options Dropdown Button (Disabled in multi-select mode)
               Builder(
                 builder: (btnContext) => IconButton(
                   icon: Icon(
                     Icons.visibility_off,
                     size: 18,
-                    color: Colors.grey.shade500,
+                    color: isMultiSelectActive
+                        ? Colors.grey.shade700
+                        : Colors.grey.shade500,
                   ),
-                  tooltip: 'Ignore Options',
-                  onPressed: () {
-                    final box = btnContext.findRenderObject() as RenderBox?;
-                    final pos = box != null
-                        ? box.localToGlobal(Offset.zero)
-                        : Offset.zero;
-                    _showIgnoreOptionsMenu(context, ref, pos);
-                  },
+                  tooltip: isMultiSelectActive
+                      ? 'Ignore options disabled in multi-select mode'
+                      : 'Ignore Options',
+                  onPressed: isMultiSelectActive
+                      ? null
+                      : () {
+                          final box =
+                              btnContext.findRenderObject() as RenderBox?;
+                          final pos = box != null
+                              ? box.localToGlobal(Offset.zero)
+                              : Offset.zero;
+                          _showIgnoreOptionsMenu(context, ref, pos);
+                        },
                 ),
               ),
             ],

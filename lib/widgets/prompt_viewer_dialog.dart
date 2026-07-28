@@ -1,4 +1,3 @@
-import 'dart:async';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
@@ -7,103 +6,7 @@ import 'package:flutter/services.dart';
 import '../services/fs_service.dart';
 import 'snackbar.dart';
 
-/// High-performance TextEditingController that highlights pre-computed search matches without layout painting lag.
-class SearchHighlightController extends TextEditingController {
-  SearchHighlightController({super.text});
-
-  String _searchPattern = '';
-  List<int> _matchIndices = [];
-  int _currentMatchCharIndex = -1;
-
-  /// Updates current search query pattern, match positions, and active match index for span highlighting
-  void setSearchMatches(
-    String pattern,
-    List<int> matchIndices,
-    int currentMatchCharIndex,
-  ) {
-    _searchPattern = pattern;
-    _matchIndices = matchIndices;
-    _currentMatchCharIndex = currentMatchCharIndex;
-    notifyListeners();
-  }
-
-  @override
-  TextSpan buildTextSpan({
-    required BuildContext context,
-    TextStyle? style,
-    required bool withComposing,
-  }) {
-    if (_searchPattern.isEmpty || text.isEmpty || _matchIndices.isEmpty) {
-      return TextSpan(text: text, style: style);
-    }
-
-    final List<InlineSpan> children = [];
-    final int patternLen = _searchPattern.length;
-    int start = 0;
-
-    // Window highlighting to max 300 visible matches around active match to guarantee 60 FPS rendering
-    final int totalMatches = _matchIndices.length;
-    int activeIdxInList = _matchIndices.indexOf(_currentMatchCharIndex);
-    if (activeIdxInList == -1) activeIdxInList = 0;
-
-    final int startMatch = (activeIdxInList - 150).clamp(0, totalMatches);
-    final int endMatch = (activeIdxInList + 150).clamp(0, totalMatches);
-
-    for (int i = startMatch; i < endMatch; i++) {
-      final int matchIndex = _matchIndices[i];
-      if (matchIndex < start) continue;
-      if (matchIndex + patternLen > text.length) break;
-
-      if (matchIndex > start) {
-        children.add(
-          TextSpan(text: text.substring(start, matchIndex), style: style),
-        );
-      }
-
-      final bool isCurrentMatch = matchIndex == _currentMatchCharIndex;
-      final String matchedText = text.substring(
-        matchIndex,
-        matchIndex + patternLen,
-      );
-
-      children.add(
-        TextSpan(
-          text: matchedText,
-          style: style?.copyWith(
-            backgroundColor: isCurrentMatch
-                ? Colors.orange.shade700
-                : Colors.amber.shade900.withAlpha(190),
-            color: Colors.white,
-            fontWeight: FontWeight.bold,
-          ),
-        ),
-      );
-
-      start = matchIndex + patternLen;
-    }
-
-    if (start < text.length) {
-      children.add(TextSpan(text: text.substring(start), style: style));
-    }
-
-    return TextSpan(children: children, style: style);
-  }
-}
-
-/// Section item for the quick-jump section selector in the prompt viewer.
-class _PromptSection {
-  const _PromptSection({
-    required this.title,
-    required this.charIndex,
-    required this.icon,
-  });
-
-  final int charIndex;
-  final IconData icon;
-  final String title;
-}
-
-/// Modern IDE-style modal dialog for previewing, inspecting, searching, and copying generated context prompts.
+/// Modern IDE-style modal dialog for previewing, inspecting, and copying generated context prompts.
 class PromptViewerDialog extends StatefulWidget {
   const PromptViewerDialog({
     super.key,
@@ -119,14 +22,10 @@ class PromptViewerDialog extends StatefulWidget {
 }
 
 class _PromptViewerDialogState extends State<PromptViewerDialog> {
-  static const int _maxDisplayLines = 2000;
-
-  late final SearchHighlightController _textController;
-  final TextEditingController _searchController = TextEditingController();
+  final TextEditingController _textController = TextEditingController();
   final ScrollController _editorScrollController = ScrollController();
   final FocusNode _editorFocusNode = FocusNode();
 
-  Timer? _searchDebounceTimer;
   bool _isLoading = true;
   String? _errorMessage;
   PromptBuildResult? _buildResult;
@@ -137,29 +36,24 @@ class _PromptViewerDialogState extends State<PromptViewerDialog> {
   String _displayText = '';
   String _fullPromptText = '';
 
-  List<_PromptSection> _sections = [];
-  _PromptSection? _selectedSection;
-  int _currentSearchMatchIndex = -1;
-  List<int> _searchMatchIndices = [];
+  List<PromptSectionData> _sections = [];
+  PromptSectionData? _selectedSection;
 
   @override
   void initState() {
     super.initState();
-    _textController = SearchHighlightController();
     _loadPrompt();
   }
 
   @override
   void dispose() {
-    _searchDebounceTimer?.cancel();
     _textController.dispose();
-    _searchController.dispose();
     _editorScrollController.dispose();
     _editorFocusNode.dispose();
     super.dispose();
   }
 
-  /// Asynchronously awaits prompt generation from background Isolate
+  /// Asynchronously awaits pre-computed prompt generation result from background Isolate
   Future<void> _loadPrompt() async {
     try {
       final result = await widget.promptFuture;
@@ -174,14 +68,19 @@ class _PromptViewerDialogState extends State<PromptViewerDialog> {
         return;
       }
 
-      setState(() {
-        _buildResult = result;
-        _fullPromptText = result.promptText;
-        _prepareDisplayText(result.promptText);
-        _textController.text = _displayText;
-        _parseSections();
-        _isLoading = false;
-      });
+      _buildResult = result;
+      _fullPromptText = result.promptText;
+      _displayText = result.displayText;
+      _totalLines = result.totalLines;
+      _isTruncated = result.isTruncated;
+      _sections = result.sections;
+      _textController.text = _displayText;
+
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+      }
     } catch (e) {
       if (mounted) {
         setState(() {
@@ -192,85 +91,8 @@ class _PromptViewerDialogState extends State<PromptViewerDialog> {
     }
   }
 
-  /// Prepares display text safely to ensure 60fps rendering without Flutter text layout lockups
-  void _prepareDisplayText(String fullText) {
-    final lines = fullText.split('\n');
-    _totalLines = lines.length;
-
-    if (lines.length > _maxDisplayLines) {
-      _isTruncated = true;
-      final previewLines = lines.take(_maxDisplayLines).join('\n');
-      _displayText =
-          '$previewLines\n\n--- [PREVIEW TRUNCATED: Showing first $_maxDisplayLines of $_totalLines lines. Click "Copy Full Prompt" to copy 100% of context] ---';
-    } else {
-      _isTruncated = false;
-      _displayText = fullText;
-    }
-  }
-
-  /// Parses logical sections from prompt text for quick navigation
-  void _parseSections() {
-    final List<_PromptSection> parsed = [];
-
-    final treeIdx = _displayText.indexOf('File Tree Structure:');
-    if (treeIdx != -1) {
-      parsed.add(
-        _PromptSection(
-          title: 'File Tree Structure',
-          charIndex: treeIdx,
-          icon: Icons.account_tree_outlined,
-        ),
-      );
-    }
-
-    final RegExp fileHeaderRegex = RegExp(
-      r'^--- File: (.*?) ---$',
-      multiLine: true,
-    );
-    for (final match in fileHeaderRegex.allMatches(_displayText)) {
-      final fileName = match.group(1) ?? 'File';
-      parsed.add(
-        _PromptSection(
-          title: 'File: $fileName',
-          charIndex: match.start,
-          icon: Icons.insert_drive_file_outlined,
-        ),
-      );
-    }
-
-    final skillsIdx = _displayText.indexOf('--- AGENT SKILLS ---');
-    if (skillsIdx != -1) {
-      parsed.add(
-        _PromptSection(
-          title: 'Agent Skills Section',
-          charIndex: skillsIdx,
-          icon: Icons.psychology_outlined,
-        ),
-      );
-    }
-
-    final RegExp skillHeaderRegex = RegExp(
-      r'^--- Skill: (.*?) ---$',
-      multiLine: true,
-    );
-    for (final match in skillHeaderRegex.allMatches(_displayText)) {
-      final skillName = match.group(1) ?? 'Skill';
-      parsed.add(
-        _PromptSection(
-          title: 'Skill: $skillName',
-          charIndex: match.start,
-          icon: Icons.extension_outlined,
-        ),
-      );
-    }
-
-    setState(() {
-      _sections = parsed;
-    });
-  }
-
   /// Jumps the text editor view to a target parsed section and scrolls smoothly
-  void _jumpToSection(_PromptSection section) {
+  void _jumpToSection(PromptSectionData section) {
     setState(() => _selectedSection = section);
 
     if (section.charIndex < _displayText.length) {
@@ -291,84 +113,6 @@ class _PromptViewerDialogState extends State<PromptViewerDialog> {
       _textController.selection = TextSelection.collapsed(
         offset: section.charIndex,
       );
-    }
-  }
-
-  /// Searches display text with 200ms debouncing and non-blocking match scanning
-  void _performSearch(String query) {
-    _searchDebounceTimer?.cancel();
-    _searchDebounceTimer = Timer(const Duration(milliseconds: 200), () {
-      final trimmed = query.trim().toLowerCase();
-      if (trimmed.isEmpty) {
-        if (mounted) {
-          setState(() {
-            _searchMatchIndices = [];
-            _currentSearchMatchIndex = -1;
-          });
-          _textController.setSearchMatches('', const [], -1);
-        }
-        return;
-      }
-
-      final List<int> matches = [];
-      final lowerText = _displayText.toLowerCase();
-      int start = 0;
-      while (start < lowerText.length) {
-        final index = lowerText.indexOf(trimmed, start);
-        if (index == -1) break;
-        matches.add(index);
-        start = index + trimmed.length;
-      }
-
-      if (mounted) {
-        setState(() {
-          _searchMatchIndices = matches;
-          _currentSearchMatchIndex = matches.isNotEmpty ? 0 : -1;
-        });
-
-        if (matches.isNotEmpty) {
-          _jumpToSearchMatch(0, trimmed.length);
-        } else {
-          _textController.setSearchMatches(trimmed, const [], -1);
-        }
-      }
-    });
-  }
-
-  /// Jumps editor view and scrolls to the N-th search match
-  void _jumpToSearchMatch(int matchIdx, int matchLength) {
-    if (matchIdx >= 0 && matchIdx < _searchMatchIndices.length) {
-      final charIdx = _searchMatchIndices[matchIdx];
-      setState(() {
-        _currentSearchMatchIndex = matchIdx;
-      });
-
-      if (charIdx < _displayText.length) {
-        final precedingText = _displayText.substring(0, charIdx);
-        final lineIndex = precedingText.split('\n').length - 1;
-        const double approxLineHeight = 18.85;
-        final double targetOffset = lineIndex * approxLineHeight;
-
-        if (_editorScrollController.hasClients) {
-          final maxExtent = _editorScrollController.position.maxScrollExtent;
-          _editorScrollController.animateTo(
-            targetOffset.clamp(0.0, maxExtent),
-            duration: const Duration(milliseconds: 200),
-            curve: Curves.easeOut,
-          );
-        }
-
-        _textController.selection = TextSelection(
-          baseOffset: charIdx,
-          extentOffset: charIdx + matchLength,
-        );
-
-        _textController.setSearchMatches(
-          _searchController.text.trim().toLowerCase(),
-          _searchMatchIndices,
-          charIdx,
-        );
-      }
     }
   }
 
@@ -399,6 +143,22 @@ class _PromptViewerDialogState extends State<PromptViewerDialog> {
       if (context.mounted) {
         showErrorSnackBar(context, 'Failed to copy prompt to clipboard: $e');
       }
+    }
+  }
+
+  /// Maps icon data according to section type string
+  IconData _getSectionIcon(String iconType) {
+    switch (iconType) {
+      case 'tree':
+        return Icons.account_tree_outlined;
+      case 'file':
+        return Icons.insert_drive_file_outlined;
+      case 'skills':
+        return Icons.psychology_outlined;
+      case 'skill':
+        return Icons.extension_outlined;
+      default:
+        return Icons.list;
     }
   }
 
@@ -591,7 +351,7 @@ class _PromptViewerDialogState extends State<PromptViewerDialog> {
                 ),
               )
             else ...[
-              // Toolbar: Search, Section Jumper, Select All, Copy Button
+              // Toolbar: Section Jumper, Select All, Copy Button
               Container(
                 padding: const EdgeInsets.symmetric(
                   horizontal: 16,
@@ -600,77 +360,8 @@ class _PromptViewerDialogState extends State<PromptViewerDialog> {
                 color: colorScheme.surface,
                 child: Row(
                   children: [
-                    SizedBox(
-                      width: 220,
-                      child: TextField(
-                        controller: _searchController,
-                        decoration: InputDecoration(
-                          hintText: 'Search text...',
-                          prefixIcon: const Icon(Icons.search, size: 18),
-                          suffixIcon: _searchController.text.isNotEmpty
-                              ? IconButton(
-                                  icon: const Icon(Icons.clear, size: 16),
-                                  onPressed: () {
-                                    _searchController.clear();
-                                    _performSearch('');
-                                  },
-                                )
-                              : null,
-                          isDense: true,
-                          contentPadding: const EdgeInsets.symmetric(
-                            horizontal: 10,
-                            vertical: 8,
-                          ),
-                          border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(8),
-                          ),
-                        ),
-                        onChanged: _performSearch,
-                      ),
-                    ),
-                    if (_searchMatchIndices.isNotEmpty) ...[
-                      const SizedBox(width: 8),
-                      Text(
-                        '${_currentSearchMatchIndex + 1}/${_searchMatchIndices.length}',
-                        style: const TextStyle(
-                          fontSize: 12,
-                          color: Colors.amber,
-                        ),
-                      ),
-                      IconButton(
-                        icon: const Icon(Icons.keyboard_arrow_up, size: 18),
-                        onPressed: () {
-                          if (_searchMatchIndices.isEmpty) return;
-                          final newIdx =
-                              (_currentSearchMatchIndex -
-                                  1 +
-                                  _searchMatchIndices.length) %
-                              _searchMatchIndices.length;
-                          _jumpToSearchMatch(
-                            newIdx,
-                            _searchController.text.trim().length,
-                          );
-                        },
-                      ),
-                      IconButton(
-                        icon: const Icon(Icons.keyboard_arrow_down, size: 18),
-                        onPressed: () {
-                          if (_searchMatchIndices.isEmpty) return;
-                          final newIdx =
-                              (_currentSearchMatchIndex + 1) %
-                              _searchMatchIndices.length;
-                          _jumpToSearchMatch(
-                            newIdx,
-                            _searchController.text.trim().length,
-                          );
-                        },
-                      ),
-                    ],
-
-                    const SizedBox(width: 12),
-
                     if (_sections.isNotEmpty) ...[
-                      DropdownButton<_PromptSection>(
+                      DropdownButton<PromptSectionData>(
                         value: _selectedSection,
                         hint: const Row(
                           children: [
@@ -687,12 +378,12 @@ class _PromptViewerDialogState extends State<PromptViewerDialog> {
                           if (sec != null) _jumpToSection(sec);
                         },
                         items: _sections.map((sec) {
-                          return DropdownMenuItem<_PromptSection>(
+                          return DropdownMenuItem<PromptSectionData>(
                             value: sec,
                             child: Row(
                               children: [
                                 Icon(
-                                  sec.icon,
+                                  _getSectionIcon(sec.iconType),
                                   size: 16,
                                   color: Colors.grey.shade400,
                                 ),
@@ -746,7 +437,7 @@ class _PromptViewerDialogState extends State<PromptViewerDialog> {
                       const SizedBox(width: 8),
                       Expanded(
                         child: Text(
-                          'Preview truncated to $_maxDisplayLines of $_totalLines lines for 60 FPS rendering. "Copy Full Prompt" copies 100% of context.',
+                          'Preview truncated to 2000 of $_totalLines lines for 60 FPS rendering. "Copy Full Prompt" copies 100% of context.',
                           style: const TextStyle(
                             fontSize: 12,
                             color: Colors.white,
