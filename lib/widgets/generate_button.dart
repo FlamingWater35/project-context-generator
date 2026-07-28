@@ -6,7 +6,7 @@ import '../providers/app_state.dart';
 import '../services/fs_service.dart';
 import 'snackbar.dart';
 
-/// Button that compiles context prompt in background isolate and copies it directly to system clipboard
+/// Button that compiles context prompt in background isolate and copies it directly to system clipboard.
 class GenerateButton extends ConsumerStatefulWidget {
   const GenerateButton({super.key});
 
@@ -17,7 +17,7 @@ class GenerateButton extends ConsumerStatefulWidget {
 class _GenerateButtonState extends ConsumerState<GenerateButton> {
   bool _isLoading = false;
 
-  /// Verifies disk snapshot changes and triggers direct prompt generation & copy
+  /// Verifies disk snapshot changes and presents options to review project changes or confirm generation.
   Future<void> _handleGenerate() async {
     setState(() => _isLoading = true);
 
@@ -63,30 +63,33 @@ class _GenerateButtonState extends ConsumerState<GenerateButton> {
             builder: (context) => AlertDialog(
               title: const Text('Project State Changed'),
               content: const Text(
-                'The physical files on disk have changed since the last check. Would you like to refresh your project snapshot or generate using the existing configuration?',
+                'The physical files on disk have changed since the last check. Would you like to review the updated project structure or confirm generation?',
               ),
               actions: [
                 TextButton(
-                  onPressed: () => Navigator.pop(context, 'cancel'),
-                  child: const Text('Cancel'),
-                ),
-                TextButton(
-                  onPressed: () => Navigator.pop(context, 'copy_anyway'),
-                  child: const Text('Copy Anyway'),
+                  onPressed: () => Navigator.pop(context, 'review'),
+                  child: const Text('Review Project'),
                 ),
                 FilledButton(
-                  onPressed: () => Navigator.pop(context, 'refresh'),
-                  child: const Text('Refresh & Copy'),
+                  onPressed: () => Navigator.pop(context, 'confirm'),
+                  child: const Text('Confirm'),
                 ),
               ],
             ),
           );
 
-          if (actionChoice == 'refresh') {
+          if (actionChoice == 'review') {
             await ref.read(appStateControllerProvider).acknowledgeChanges();
             ref.invalidate(fileTreeProvider);
-            if (mounted) await _performGenerateAndCopyPrompt();
-          } else if (actionChoice == 'copy_anyway') {
+            if (mounted) {
+              showInfoSnackBar(
+                context,
+                'Project structure updated. Please review your file selections.',
+              );
+            }
+          } else if (actionChoice == 'confirm') {
+            await ref.read(appStateControllerProvider).acknowledgeChanges();
+            ref.invalidate(fileTreeProvider);
             if (mounted) await _performGenerateAndCopyPrompt();
           }
         }
@@ -106,7 +109,7 @@ class _GenerateButtonState extends ConsumerState<GenerateButton> {
     }
   }
 
-  /// Compiles full prompt context in background isolate and copies directly to clipboard
+  /// Compiles full prompt context in background isolate and copies directly to clipboard.
   Future<void> _performGenerateAndCopyPrompt() async {
     final config = ref.read(selectedConfigProvider);
     if (config == null) return;
