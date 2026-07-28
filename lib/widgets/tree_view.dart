@@ -1,4 +1,3 @@
-import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -62,7 +61,7 @@ class _RecursiveDirectoryNode extends ConsumerWidget {
   }
 }
 
-// Tree view layout organizing folder hierarchies inside horizontal and vertical scrolls with drag multi-selection
+// Tree view layout organizing folder hierarchies inside horizontal and vertical scrolls with multi-selection action toolbar
 class ProjectTreeView extends ConsumerStatefulWidget {
   const ProjectTreeView({super.key});
 
@@ -191,77 +190,63 @@ class _ProjectTreeViewState extends ConsumerState<ProjectTreeView> {
                 ),
               ),
 
-            // Scrollable File Tree with Drag Gesture Listener
+            // Scrollable File Tree Container
             Expanded(
-              child: Listener(
-                onPointerDown: (event) {
-                  if (event.buttons == kPrimaryMouseButton) {
-                    ref.read(isTreeDraggingProvider.notifier).state = true;
-                  }
-                },
-                onPointerUp: (_) {
-                  ref.read(isTreeDraggingProvider.notifier).state = false;
-                },
-                onPointerCancel: (_) {
-                  ref.read(isTreeDraggingProvider.notifier).state = false;
-                },
-                child: LayoutBuilder(
-                  builder: (context, constraints) {
-                    final targetWidth = requiredWidth > constraints.maxWidth
-                        ? requiredWidth
-                        : constraints.maxWidth;
+              child: LayoutBuilder(
+                builder: (context, constraints) {
+                  final targetWidth = requiredWidth > constraints.maxWidth
+                      ? requiredWidth
+                      : constraints.maxWidth;
 
-                    return Scrollbar(
+                  return Scrollbar(
+                    controller: _horizontalController,
+                    thumbVisibility: true,
+                    child: SingleChildScrollView(
                       controller: _horizontalController,
-                      thumbVisibility: true,
-                      child: SingleChildScrollView(
-                        controller: _horizontalController,
-                        scrollDirection: Axis.horizontal,
-                        child: AnimatedContainer(
-                          duration: const Duration(milliseconds: 200),
-                          curve: Curves.easeInOut,
-                          constraints: BoxConstraints(
-                            minWidth: constraints.maxWidth,
-                            maxWidth: targetWidth,
-                          ),
-                          child: Scrollbar(
+                      scrollDirection: Axis.horizontal,
+                      child: AnimatedContainer(
+                        duration: const Duration(milliseconds: 200),
+                        curve: Curves.easeInOut,
+                        constraints: BoxConstraints(
+                          minWidth: constraints.maxWidth,
+                          maxWidth: targetWidth,
+                        ),
+                        child: Scrollbar(
+                          controller: _scrollController,
+                          thumbVisibility: true,
+                          child: SingleChildScrollView(
                             controller: _scrollController,
-                            thumbVisibility: true,
-                            child: SingleChildScrollView(
-                              controller: _scrollController,
-                              padding: const EdgeInsets.only(
-                                left: 16.0,
-                                right: 24.0,
-                                top: 8.0,
-                                bottom: 8.0,
-                              ),
-                              child: RepaintBoundary(
-                                child: Column(
-                                  crossAxisAlignment:
-                                      CrossAxisAlignment.stretch,
-                                  children: rootNode.children.map((child) {
-                                    if (child.isDirectory) {
-                                      return _RecursiveDirectoryNode(
-                                        key: ValueKey(child.path),
-                                        node: child,
-                                        depth: 0,
-                                      );
-                                    }
-                                    return FileNodeWidget(
+                            padding: const EdgeInsets.only(
+                              left: 16.0,
+                              right: 24.0,
+                              top: 8.0,
+                              bottom: 8.0,
+                            ),
+                            child: RepaintBoundary(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.stretch,
+                                children: rootNode.children.map((child) {
+                                  if (child.isDirectory) {
+                                    return _RecursiveDirectoryNode(
                                       key: ValueKey(child.path),
                                       node: child,
                                       depth: 0,
                                     );
-                                  }).toList(),
-                                ),
+                                  }
+                                  return FileNodeWidget(
+                                    key: ValueKey(child.path),
+                                    node: child,
+                                    depth: 0,
+                                  );
+                                }).toList(),
                               ),
                             ),
                           ),
                         ),
                       ),
-                    );
-                  },
-                ),
+                    ),
+                  );
+                },
               ),
             ),
           ],

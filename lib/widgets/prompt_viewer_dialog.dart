@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
@@ -6,17 +7,23 @@ import 'package:flutter/services.dart';
 import '../services/fs_service.dart';
 import 'snackbar.dart';
 
-/// Custom TextEditingController that highlights search matches in the prompt text.
+/// High-performance TextEditingController that highlights pre-computed search matches without layout painting lag.
 class SearchHighlightController extends TextEditingController {
   SearchHighlightController({super.text});
 
   String _searchPattern = '';
+  List<int> _matchIndices = [];
   int _currentMatchCharIndex = -1;
 
-  /// Updates current search query pattern and active match index for span highlighting
-  void setSearchQuery(String pattern, int currentMatchIndex) {
+  /// Updates current search query pattern, match positions, and active match index for span highlighting
+  void setSearchMatches(
+    String pattern,
+    List<int> matchIndices,
+    int currentMatchCharIndex,
+  ) {
     _searchPattern = pattern;
-    _currentMatchCharIndex = currentMatchIndex;
+    _matchIndices = matchIndices;
+    _currentMatchCharIndex = currentMatchCharIndex;
     notifyListeners();
   }
 
@@ -26,21 +33,26 @@ class SearchHighlightController extends TextEditingController {
     TextStyle? style,
     required bool withComposing,
   }) {
-    if (_searchPattern.isEmpty || text.isEmpty) {
+    if (_searchPattern.isEmpty || text.isEmpty || _matchIndices.isEmpty) {
       return TextSpan(text: text, style: style);
     }
 
     final List<InlineSpan> children = [];
-    final String lowerText = text.toLowerCase();
-    final String lowerPattern = _searchPattern.toLowerCase();
-
+    final int patternLen = _searchPattern.length;
     int start = 0;
-    while (true) {
-      final int matchIndex = lowerText.indexOf(lowerPattern, start);
-      if (matchIndex == -1) {
-        children.add(TextSpan(text: text.substring(start), style: style));
-        break;
-      }
+
+    // Window highlighting to max 300 visible matches around active match to guarantee 60 FPS rendering
+    final int totalMatches = _matchIndices.length;
+    int activeIdxInList = _matchIndices.indexOf(_currentMatchCharIndex);
+    if (activeIdxInList == -1) activeIdxInList = 0;
+
+    final int startMatch = (activeIdxInList - 150).clamp(0, totalMatches);
+    final int endMatch = (activeIdxInList + 150).clamp(0, totalMatches);
+
+    for (int i = startMatch; i < endMatch; i++) {
+      final int matchIndex = _matchIndices[i];
+      if (matchIndex < start) continue;
+      if (matchIndex + patternLen > text.length) break;
 
       if (matchIndex > start) {
         children.add(
@@ -51,7 +63,7 @@ class SearchHighlightController extends TextEditingController {
       final bool isCurrentMatch = matchIndex == _currentMatchCharIndex;
       final String matchedText = text.substring(
         matchIndex,
-        matchIndex + lowerPattern.length,
+        matchIndex + patternLen,
       );
 
       children.add(
@@ -67,7 +79,11 @@ class SearchHighlightController extends TextEditingController {
         ),
       );
 
-      start = matchIndex + lowerPattern.length;
+      start = matchIndex + patternLen;
+    }
+
+    if (start < text.length) {
+      children.add(TextSpan(text: text.substring(start), style: style));
     }
 
     return TextSpan(children: children, style: style);
@@ -110,6 +126,7 @@ class _PromptViewerDialogState extends State<PromptViewerDialog> {
   final ScrollController _editorScrollController = ScrollController();
   final FocusNode _editorFocusNode = FocusNode();
 
+  Timer? _searchDebounceTimer;
   bool _isLoading = true;
   String? _errorMessage;
   PromptBuildResult? _buildResult;
@@ -134,6 +151,7 @@ class _PromptViewerDialogState extends State<PromptViewerDialog> {
 
   @override
   void dispose() {
+    _searchDebounceTimer?.cancel();
     _textController.dispose();
     _searchController.dispose();
     _editorScrollController.dispose();
@@ -251,7 +269,7 @@ class _PromptViewerDialogState extends State<PromptViewerDialog> {
     });
   }
 
-  /// Jumps the text editor cursor/view to a target parsed section and scrolls smoothly
+  /// Jumps the text editor view to a target parsed section and scrolls smoothly
   void _jumpToSection(_PromptSection section) {
     setState(() => _selectedSection = section);
 
@@ -276,44 +294,55 @@ class _PromptViewerDialogState extends State<PromptViewerDialog> {
     }
   }
 
-  /// Searches display text for a query string and highlights matches in the prompt viewer
+  /// Searches display text with 200ms debouncing and non-blocking match scanning
   void _performSearch(String query) {
-    final trimmed = query.trim().toLowerCase();
-    if (trimmed.isEmpty) {
-      setState(() {
-        _searchMatchIndices = [];
-        _currentSearchMatchIndex = -1;
-      });
-      _textController.setSearchQuery('', -1);
-      return;
-    }
+    _searchDebounceTimer?.cancel();
+    _searchDebounceTimer = Timer(const Duration(milliseconds: 200), () {
+      final trimmed = query.trim().toLowerCase();
+      if (trimmed.isEmpty) {
+        if (mounted) {
+          setState(() {
+            _searchMatchIndices = [];
+            _currentSearchMatchIndex = -1;
+          });
+          _textController.setSearchMatches('', const [], -1);
+        }
+        return;
+      }
 
-    final List<int> matches = [];
-    final lowerText = _displayText.toLowerCase();
-    int start = 0;
-    while (true) {
-      final index = lowerText.indexOf(trimmed, start);
-      if (index == -1) break;
-      matches.add(index);
-      start = index + trimmed.length;
-    }
+      final List<int> matches = [];
+      final lowerText = _displayText.toLowerCase();
+      int start = 0;
+      while (start < lowerText.length) {
+        final index = lowerText.indexOf(trimmed, start);
+        if (index == -1) break;
+        matches.add(index);
+        start = index + trimmed.length;
+      }
 
-    setState(() {
-      _searchMatchIndices = matches;
-      _currentSearchMatchIndex = matches.isNotEmpty ? 0 : -1;
+      if (mounted) {
+        setState(() {
+          _searchMatchIndices = matches;
+          _currentSearchMatchIndex = matches.isNotEmpty ? 0 : -1;
+        });
+
+        if (matches.isNotEmpty) {
+          _jumpToSearchMatch(0, trimmed.length);
+        } else {
+          _textController.setSearchMatches(trimmed, const [], -1);
+        }
+      }
     });
-
-    if (matches.isNotEmpty) {
-      _jumpToSearchMatch(0, trimmed.length);
-    } else {
-      _textController.setSearchQuery(trimmed, -1);
-    }
   }
 
-  /// Jumps editor view and scrolls to the N-th search match while updating highlights
+  /// Jumps editor view and scrolls to the N-th search match
   void _jumpToSearchMatch(int matchIdx, int matchLength) {
     if (matchIdx >= 0 && matchIdx < _searchMatchIndices.length) {
       final charIdx = _searchMatchIndices[matchIdx];
+      setState(() {
+        _currentSearchMatchIndex = matchIdx;
+      });
+
       if (charIdx < _displayText.length) {
         final precedingText = _displayText.substring(0, charIdx);
         final lineIndex = precedingText.split('\n').length - 1;
@@ -334,7 +363,11 @@ class _PromptViewerDialogState extends State<PromptViewerDialog> {
           extentOffset: charIdx + matchLength,
         );
 
-        _textController.setSearchQuery(_searchController.text.trim(), charIdx);
+        _textController.setSearchMatches(
+          _searchController.text.trim().toLowerCase(),
+          _searchMatchIndices,
+          charIdx,
+        );
       }
     }
   }
@@ -613,7 +646,6 @@ class _PromptViewerDialogState extends State<PromptViewerDialog> {
                                   1 +
                                   _searchMatchIndices.length) %
                               _searchMatchIndices.length;
-                          setState(() => _currentSearchMatchIndex = newIdx);
                           _jumpToSearchMatch(
                             newIdx,
                             _searchController.text.trim().length,
@@ -627,7 +659,6 @@ class _PromptViewerDialogState extends State<PromptViewerDialog> {
                           final newIdx =
                               (_currentSearchMatchIndex + 1) %
                               _searchMatchIndices.length;
-                          setState(() => _currentSearchMatchIndex = newIdx);
                           _jumpToSearchMatch(
                             newIdx,
                             _searchController.text.trim().length,

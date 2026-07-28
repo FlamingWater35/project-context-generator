@@ -28,11 +28,8 @@ final projectSortOptionProvider = StateProvider<ProjectSortOption>(
   (ref) => ProjectSortOption.nameAsc,
 );
 
-/// Tracks node paths currently highlighted/selected via drag or click multi-select
+/// Tracks node paths currently highlighted/selected via multi-select gestures or button toggles
 final selectedNodePathsProvider = StateProvider<Set<String>>((ref) => const {});
-
-/// Tracks whether mouse dragging selection is currently active in the file tree
-final isTreeDraggingProvider = StateProvider<bool>((ref) => false);
 
 // Tracks identified disk snapshots per project ID to locate structural updates
 final projectSnapshotsProvider = StateProvider<Map<String, Set<String>>>(
