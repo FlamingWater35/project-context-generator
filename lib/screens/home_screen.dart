@@ -6,6 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models/project_config.dart';
 import '../providers/app_state.dart';
 import '../services/fs_service.dart';
+import '../widgets/apply_changes_dialog.dart';
 import '../widgets/bottom_bar.dart';
 import '../widgets/generate_button.dart';
 import '../widgets/ignore_list.dart';
@@ -234,6 +235,17 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                               );
                             },
                           ),
+                          ElevatedButton.icon(
+                            icon: const Icon(Icons.build_circle_outlined),
+                            label: const Text('Apply Changes'),
+                            onPressed: () {
+                              showDialog(
+                                context: context,
+                                builder: (_) =>
+                                    ApplyChangesDialog(config: config),
+                              );
+                            },
+                          ),
                           const GenerateButton(),
                           ElevatedButton.icon(
                             icon: const Icon(Icons.refresh, size: 18),
@@ -286,6 +298,18 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                               showDialog(
                                 context: context,
                                 builder: (_) => const SkillsDialog(),
+                              );
+                            },
+                          ),
+                          const SizedBox(width: 8),
+                          ElevatedButton.icon(
+                            icon: const Icon(Icons.build_circle_outlined),
+                            label: const Text('Apply Changes'),
+                            onPressed: () {
+                              showDialog(
+                                context: context,
+                                builder: (_) =>
+                                    ApplyChangesDialog(config: config),
                               );
                             },
                           ),
