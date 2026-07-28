@@ -49,10 +49,27 @@ class _ApplyChangesDialogState extends ConsumerState<ApplyChangesDialog> {
     super.dispose();
   }
 
-  /// Starts polling the system clipboard for new LLM code changes.
-  void _startListening() {
-    setState(() => _isListening = true);
+  /// Starts polling system clipboard for new LLM changes, seeding initial clipboard text to ignore pre-existing content.
+  Future<void> _startListening() async {
     _clipboardTimer?.cancel();
+    _clipboardTimer = null;
+
+    if (mounted) {
+      setState(() => _isListening = true);
+    }
+
+    // Capture current clipboard content as baseline so pre-existing text is not immediately processed
+    try {
+      final initialData = await Clipboard.getData(Clipboard.kTextPlain);
+      if (initialData?.text != null) {
+        _lastClipboardText = initialData!.text!;
+      }
+    } catch (e) {
+      debugPrint('Error capturing initial clipboard state: $e');
+    }
+
+    if (!mounted || !_isListening) return;
+
     _clipboardTimer = Timer.periodic(
       const Duration(milliseconds: 700),
       (_) => _checkClipboard(),
@@ -68,7 +85,7 @@ class _ApplyChangesDialogState extends ConsumerState<ApplyChangesDialog> {
     }
   }
 
-  /// Checks system clipboard text and parses detected file code blocks.
+  /// Checks system clipboard text and parses detected file code blocks if content has changed.
   Future<void> _checkClipboard() async {
     try {
       final data = await Clipboard.getData(Clipboard.kTextPlain);
@@ -84,7 +101,7 @@ class _ApplyChangesDialogState extends ConsumerState<ApplyChangesDialog> {
     }
   }
 
-  /// Manually reads content from system clipboard.
+  /// Manually reads content from system clipboard and parses immediately.
   Future<void> _pasteFromClipboard() async {
     try {
       final data = await Clipboard.getData(Clipboard.kTextPlain);
