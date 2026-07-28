@@ -51,6 +51,18 @@ class CodeParserService {
     'ini',
   };
 
+  /// Known extension-less system or build configuration file names.
+  static const Set<String> _knownExtensionlessFiles = {
+    'dockerfile',
+    'makefile',
+    'license',
+    'procfile',
+    'gemfile',
+    'cmakelists.txt',
+    'vagrantfile',
+    'rakefile',
+  };
+
   /// Parses LLM text sequentially by matching each code block with its closest preceding path.
   static List<FileCodeChange> parseCodeChanges(String text, String rootPath) {
     if (text.trim().isEmpty || rootPath.isEmpty) return [];
@@ -139,8 +151,9 @@ class CodeParserService {
   static String? _extractPathFromText(String text, String rootPath) {
     if (text.trim().isEmpty) return null;
 
+    // Matches path-like strings with extensions or known file patterns, including paths with spaces
     final pathRegex = RegExp(
-      r'(?:###|##|#|\*\*|---)?\s*(?:File:\s*)?`?([a-zA-Z0-9_\-\/\.\+]+?\.[a-zA-Z0-9]+)`?',
+      r'(?:###|##|#|\*\*|---)?\s*(?:File:\s*)?`?([a-zA-Z0-9_\-\/\.\+\s]+?\.[a-zA-Z0-9]+|[a-zA-Z0-9_\-\/\.\+]+)`?',
       caseSensitive: false,
     );
 
@@ -158,9 +171,14 @@ class CodeParserService {
     return null;
   }
 
-  /// Cleans and validates candidate path strings safely using triple-quoted raw string regexes.
+  /// Cleans and validates candidate path strings safely without corrupting paths containing spaces.
   static String? _cleanPathString(String raw, String rootPath) {
-    var cleaned = raw.replaceAll(RegExp(r'''[`"':,\s\(\)]'''), '').trim();
+    // Strip surrounding quotes, backticks, colons, brackets, and whitespace using triple-quoted raw string
+    var cleaned = raw.trim();
+    cleaned = cleaned.replaceAll(
+      RegExp(r'''^[`"'\s\(\):]+|[`"'\s\(\):]+$'''),
+      '',
+    );
     if (cleaned.isEmpty) return null;
 
     // Standardize slashes
@@ -179,14 +197,15 @@ class CodeParserService {
       return null;
     }
 
-    // Must contain slashes OR have a known file extension
     final bool hasSlash = cleaned.contains('/');
+    final String baseName = p.basename(cleaned).toLowerCase();
     final extMatch = RegExp(r'\.([a-zA-Z0-9]+)$').firstMatch(cleaned);
     final ext = extMatch?.group(1)?.toLowerCase();
 
     final bool isKnownExt = ext != null && _knownExtensions.contains(ext);
+    final bool isKnownSpecialFile = _knownExtensionlessFiles.contains(baseName);
 
-    if (!hasSlash && !isKnownExt) {
+    if (!hasSlash && !isKnownExt && !isKnownSpecialFile) {
       return null;
     }
 

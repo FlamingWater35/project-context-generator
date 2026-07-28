@@ -364,7 +364,10 @@ class AppStateController {
   /// Resolves input paths into file paths using an indexed lookup map for O(1) matching.
   List<String> _expandPathsToFiles(Iterable<String> paths) {
     final treeNode = _ref.read(fileTreeProvider).value;
-    if (treeNode == null) return paths.toList();
+    if (treeNode == null) {
+      // Return empty list if tree is not yet loaded to avoid persisting unexpanded directory paths
+      return const [];
+    }
 
     final Map<String, TreeNode> pathMap = {};
     treeNode.buildPathMap(pathMap);

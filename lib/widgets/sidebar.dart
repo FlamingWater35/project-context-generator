@@ -5,7 +5,7 @@ import 'package:silky_scroll/silky_scroll.dart';
 import '../models/project_config.dart';
 import '../providers/app_state.dart';
 
-// Sidebar panel presenting lists of configured projects, project sorting, active project switching, and configuration creations
+/// Sidebar panel presenting lists of configured projects, project sorting, active project switching, and configuration creations.
 class Sidebar extends ConsumerStatefulWidget {
   const Sidebar({super.key});
 
@@ -25,7 +25,7 @@ class _SidebarState extends ConsumerState<Sidebar> {
     super.dispose();
   }
 
-  // Opens a pop-up dialog to capture names for new configuration files
+  /// Opens a pop-up dialog to capture names for new configuration files.
   void _showCreateDialog(BuildContext context, WidgetRef ref) {
     final controller = TextEditingController();
     showDialog(
@@ -63,7 +63,7 @@ class _SidebarState extends ConsumerState<Sidebar> {
     ).then((_) => controller.dispose());
   }
 
-  // Launches target input dialogs enabling name overrides of configurations
+  /// Launches target input dialogs enabling name overrides of configurations.
   void _showRenameDialog(
     BuildContext context,
     WidgetRef ref,
@@ -110,7 +110,7 @@ class _SidebarState extends ConsumerState<Sidebar> {
     ).then((_) => controller.dispose());
   }
 
-  // Requests deletion verification before wiping files
+  /// Requests deletion verification before wiping files.
   void _showDeleteConfirmation(
     BuildContext context,
     WidgetRef ref,
@@ -261,6 +261,18 @@ class _SidebarState extends ConsumerState<Sidebar> {
                 decoration: InputDecoration(
                   hintText: 'Search projects...',
                   prefixIcon: const Icon(Icons.search, size: 20),
+                  suffixIcon: _searchQuery.isNotEmpty
+                      ? IconButton(
+                          icon: const Icon(Icons.clear, size: 18),
+                          tooltip: 'Clear search',
+                          onPressed: () {
+                            _searchController.clear();
+                            setState(() {
+                              _searchQuery = '';
+                            });
+                          },
+                        )
+                      : null,
                   isDense: true,
                   contentPadding: const EdgeInsets.all(8),
                   border: OutlineInputBorder(
