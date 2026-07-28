@@ -55,8 +55,8 @@ class ConfigsNotifier extends StateNotifier<List<ProjectConfig>> {
 
   final ConfigService _configService;
   final Ref _ref;
-  ProjectConfig? _pendingConfig;
-  String? _pendingOldName;
+  final Map<String, ProjectConfig> _pendingConfigs = {};
+  final Map<String, String?> _pendingOldNames = {};
   Timer? _saveTimer;
 
   /// Stores and appends a fresh project record directly into persistent storage.
@@ -72,15 +72,17 @@ class ConfigsNotifier extends StateNotifier<List<ProjectConfig>> {
     }
   }
 
-  /// Defers and serializes target state parameters in intervals using a debounce window.
+  /// Defers and serializes target state parameters using a map to avoid data loss during rapid project edits.
   void updateConfig(ProjectConfig config, {String? oldName}) {
     state = [
       for (final c in state)
         if (c.id == config.id) config else c,
     ];
 
-    _pendingConfig = config;
-    _pendingOldName = oldName;
+    _pendingConfigs[config.id] = config;
+    if (oldName != null) {
+      _pendingOldNames[config.id] = oldName;
+    }
 
     _saveTimer?.cancel();
     _saveTimer = Timer(const Duration(milliseconds: 300), () {
@@ -88,16 +90,19 @@ class ConfigsNotifier extends StateNotifier<List<ProjectConfig>> {
     });
   }
 
-  /// Executes actual synchronous file writes for any configurations queued via the debounce window.
+  /// Executes synchronous file writes for all queued project configurations.
   void _savePending() {
-    if (_pendingConfig != null) {
-      try {
-        _configService.saveConfig(_pendingConfig!, oldName: _pendingOldName);
-      } catch (e) {
-        debugPrint('Failure flushing configs during periodic saving steps: $e');
+    if (_pendingConfigs.isNotEmpty) {
+      for (final entry in _pendingConfigs.entries) {
+        try {
+          final oldName = _pendingOldNames[entry.key];
+          _configService.saveConfig(entry.value, oldName: oldName);
+        } catch (e) {
+          debugPrint('Failure flushing config ${entry.key}: $e');
+        }
       }
-      _pendingConfig = null;
-      _pendingOldName = null;
+      _pendingConfigs.clear();
+      _pendingOldNames.clear();
     }
     _saveTimer?.cancel();
     _saveTimer = null;
@@ -111,11 +116,9 @@ class ConfigsNotifier extends StateNotifier<List<ProjectConfig>> {
   /// Removes a configuration metadata record and cleans associated disk assets.
   Future<void> deleteConfig(ProjectConfig config) async {
     try {
-      if (_pendingConfig?.id == config.id) {
-        _pendingConfig = null;
-        _pendingOldName = null;
-        _saveTimer?.cancel();
-      }
+      _pendingConfigs.remove(config.id);
+      _pendingOldNames.remove(config.id);
+
       await _configService.deleteConfig(config);
       state = state.where((c) => c.id != config.id).toList();
 
@@ -256,20 +259,23 @@ final fileTreeProvider = FutureProvider<TreeNode?>((ref) async {
     if (knownPaths == null) {
       final configService = ref.read(configServiceProvider);
       knownPaths = await configService.loadSnapshot(treeConfig.configId);
-
       if (!mounted) return null;
+    }
 
-      if (knownPaths == null) {
-        final fs = ref.read(fsServiceProvider);
-        knownPaths = await fs.scanPaths(
-          treeConfig.rootPath,
-          treeConfig.ignorePatterns,
-        );
+    final fsService = ref.read(fsServiceProvider);
+    final treeNode = await fsService.buildTree(
+      treeConfig.rootPath,
+      treeConfig.ignorePatterns,
+      knownPaths: knownPaths,
+    );
 
-        if (!mounted) return null;
+    if (!mounted || treeNode == null) return treeNode;
 
-        await configService.saveSnapshot(treeConfig.configId, knownPaths);
-      }
+    // Single-pass optimization: extract paths directly from built tree if snapshot was missing
+    if (knownPaths == null) {
+      knownPaths = treeNode.getAllRelativePaths();
+      final configService = ref.read(configServiceProvider);
+      await configService.saveSnapshot(treeConfig.configId, knownPaths);
 
       if (mounted) {
         Future.microtask(() {
@@ -286,23 +292,20 @@ final fileTreeProvider = FutureProvider<TreeNode?>((ref) async {
       }
     }
 
-    final fsService = ref.read(fsServiceProvider);
-    return await fsService.buildTree(
-      treeConfig.rootPath,
-      treeConfig.ignorePatterns,
-      knownPaths: knownPaths,
-    );
+    return treeNode;
   } catch (e) {
     debugPrint('File parsing scan exception captured: $e');
     return null;
   }
 });
 
-/// Computes prompt statistics in background isolate for live display in bottom status bar.
-/// Computes prompt statistics in background isolate for live display in bottom status bar.
+/// Computes prompt statistics in background isolate for live display in bottom status bar with short debounce.
 final promptStatsProvider = FutureProvider<PromptBuildResult?>((ref) async {
   final config = ref.watch(selectedConfigProvider);
   if (config == null || config.rootPath.isEmpty) return null;
+
+  // Debounce statistical calculation calls to avoid spawning excessive Isolates during rapid toggles
+  await Future.delayed(const Duration(milliseconds: 150));
 
   final selectedSkillIds = config.selectedSkillIds.toSet();
   final allSkills = ref.read(allProjectSkillsProvider);
@@ -332,24 +335,17 @@ class AppStateController {
 
   final Ref _ref;
 
-  /// Recursively resolves input paths (files or directories) into individual relative file paths.
+  /// Resolves input paths into file paths using an indexed lookup map for O(1) matching.
   List<String> _expandPathsToFiles(Iterable<String> paths) {
     final treeNode = _ref.read(fileTreeProvider).value;
     if (treeNode == null) return paths.toList();
 
+    final Map<String, TreeNode> pathMap = {};
+    treeNode.buildPathMap(pathMap);
+
     final Set<String> resultFiles = {};
-
-    TreeNode? findNode(TreeNode current, String relPath) {
-      if (current.relativePath == relPath) return current;
-      for (final child in current.children) {
-        final found = findNode(child, relPath);
-        if (found != null) return found;
-      }
-      return null;
-    }
-
     for (final path in paths) {
-      final node = findNode(treeNode, path);
+      final node = pathMap[path];
       if (node != null) {
         resultFiles.addAll(node.getAllFilePaths());
       } else {

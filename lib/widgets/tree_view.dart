@@ -55,6 +55,16 @@ class _ProjectTreeViewState extends ConsumerState<ProjectTreeView> {
     final selectedPaths = ref.watch(selectedNodePathsProvider);
     final controller = ref.read(appStateControllerProvider);
 
+    // Precompute active parent directory paths containing checked files in O(N) for O(1) row rendering
+    final includedSet = ref.watch(selectedIncludedFilesSetProvider);
+    final Set<String> activeParentDirectories = {};
+    for (final fileRelPath in includedSet) {
+      final parts = fileRelPath.split('/');
+      for (int i = 1; i < parts.length; i++) {
+        activeParentDirectories.add(parts.sublist(0, i).join('/'));
+      }
+    }
+
     return AnimatedSwitcher(
       duration: const Duration(milliseconds: 300),
       switchInCurve: Curves.easeIn,
@@ -201,7 +211,11 @@ class _ProjectTreeViewState extends ConsumerState<ProjectTreeView> {
                                 final item = flatItems[index];
                                 return RepaintBoundary(
                                   key: ValueKey(item.node.path),
-                                  child: FileNodeWidget(item: item),
+                                  child: FileNodeWidget(
+                                    item: item,
+                                    activeParentDirectories:
+                                        activeParentDirectories,
+                                  ),
                                 );
                               },
                             ),

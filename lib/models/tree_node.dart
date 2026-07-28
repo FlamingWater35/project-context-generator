@@ -83,12 +83,32 @@ class TreeNode {
     return result;
   }
 
+  /// Populates a lookup map of relativePath to TreeNode for O(1) path access.
+  void buildPathMap(Map<String, TreeNode> map) {
+    map[relativePath] = this;
+    for (final child in children) {
+      child.buildPathMap(map);
+    }
+  }
+
   /// Retrieves all descendant relative file paths recursively under this node.
   List<String> getAllFilePaths() {
     if (!isDirectory) return [relativePath];
     final List<String> paths = [];
     for (final child in children) {
       paths.addAll(child.getAllFilePaths());
+    }
+    return paths;
+  }
+
+  /// Collects all non-empty relative paths (both files and directories) for single-pass snapshot calculation.
+  Set<String> getAllRelativePaths() {
+    final Set<String> paths = {};
+    if (relativePath.isNotEmpty) {
+      paths.add(relativePath);
+    }
+    for (final child in children) {
+      paths.addAll(child.getAllRelativePaths());
     }
     return paths;
   }

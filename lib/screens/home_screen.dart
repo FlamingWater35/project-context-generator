@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../models/project_config.dart';
 import '../providers/app_state.dart';
+import '../services/fs_service.dart';
 import '../widgets/bottom_bar.dart';
 import '../widgets/generate_button.dart';
 import '../widgets/ignore_list.dart';
@@ -27,12 +28,19 @@ class HomeScreen extends ConsumerStatefulWidget {
 }
 
 class _HomeScreenState extends ConsumerState<HomeScreen> {
-  double _sidebarWidth = 250.0;
+  late final ValueNotifier<double> _sidebarWidthNotifier;
 
   @override
   void initState() {
     super.initState();
+    _sidebarWidthNotifier = ValueNotifier<double>(250.0);
     _loadSidebarWidth();
+  }
+
+  @override
+  void dispose() {
+    _sidebarWidthNotifier.dispose();
+    super.dispose();
   }
 
   /// Restores saved workspace layout width parameters safely on widget initialization.
@@ -42,15 +50,80 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
       final state = await configService.loadWindowState();
       if (state != null && state['sidebarWidth'] != null) {
         final width = (state['sidebarWidth'] as num).toDouble();
-        if (mounted) {
-          setState(() {
-            _sidebarWidth = width;
-          });
-        }
+        _sidebarWidthNotifier.value = width;
         ref.read(sidebarWidthProvider.notifier).state = width;
       }
     } catch (e) {
       debugPrint('Unable to set saved custom layout dimensions: $e');
+    }
+  }
+
+  /// Generates prompt context and copies directly to system clipboard for keyboard shortcuts.
+  Future<void> _handleGlobalGenerateShortcut(
+    BuildContext context,
+    WidgetRef ref,
+  ) async {
+    try {
+      final config = ref.read(selectedConfigProvider);
+      if (config == null || config.rootPath.isEmpty) {
+        if (context.mounted) {
+          showErrorSnackBar(
+            context,
+            'Please select a valid root folder first.',
+          );
+        }
+        return;
+      }
+
+      if (config.includedFiles.isEmpty) {
+        if (context.mounted) {
+          showErrorSnackBar(
+            context,
+            'No files selected to include in prompt context.',
+          );
+        }
+        return;
+      }
+
+      final fsService = ref.read(fsServiceProvider);
+      final selectedSkillIds = config.selectedSkillIds.toSet();
+      final allSkills = ref.read(allProjectSkillsProvider);
+      final selectedSkills = allSkills
+          .where((s) => selectedSkillIds.contains(s.id))
+          .toList();
+
+      final params = PromptBuildParams(
+        projectName: config.name,
+        rootPath: config.rootPath,
+        includedFiles: config.includedFiles,
+        selectedSkills: selectedSkills,
+        ignorePatterns: config.ignorePatterns,
+      );
+
+      final result = await fsService.buildPromptContext(params);
+
+      if (result.fileCount == 0) {
+        if (context.mounted) {
+          showErrorSnackBar(
+            context,
+            'No files selected or all selected files are ignored.',
+          );
+        }
+        return;
+      }
+
+      await Clipboard.setData(ClipboardData(text: result.promptText));
+
+      if (context.mounted) {
+        showSuccessSnackBar(
+          context,
+          'Prompt generated and copied to clipboard! (${result.fileCount} files, ${result.totalLines} lines)',
+        );
+      }
+    } catch (e) {
+      if (context.mounted) {
+        showErrorSnackBar(context, 'Shortcut prompt generation failed: $e');
+      }
     }
   }
 
@@ -276,6 +349,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
         actions: <Type, Action<Intent>>{
           GenerateIntent: CallbackAction<GenerateIntent>(
             onInvoke: (intent) {
+              _handleGlobalGenerateShortcut(context, ref);
               return null;
             },
           ),
@@ -292,81 +366,91 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                 maxSidebarWidth = minSidebarWidth;
               }
 
-              final activeSidebarWidth = _sidebarWidth.clamp(
-                minSidebarWidth,
-                maxSidebarWidth,
-              );
+              return ValueListenableBuilder<double>(
+                valueListenable: _sidebarWidthNotifier,
+                builder: (context, currentSidebarWidth, child) {
+                  final activeSidebarWidth = currentSidebarWidth.clamp(
+                    minSidebarWidth,
+                    maxSidebarWidth,
+                  );
 
-              return Row(
-                children: [
-                  SizedBox(width: activeSidebarWidth, child: const Sidebar()),
-                  MouseRegion(
-                    cursor: SystemMouseCursors.resizeColumn,
-                    child: GestureDetector(
-                      behavior: HitTestBehavior.translucent,
-                      onHorizontalDragUpdate: (details) {
-                        setState(() {
-                          _sidebarWidth = (_sidebarWidth + details.delta.dx)
-                              .clamp(minSidebarWidth, maxSidebarWidth);
-                        });
-                      },
-                      onHorizontalDragEnd: (_) {
-                        ref.read(sidebarWidthProvider.notifier).state =
-                            _sidebarWidth;
-                      },
-                      child: SizedBox(
-                        width: 12,
-                        child: Stack(
-                          alignment: Alignment.center,
-                          children: [
-                            Container(color: Colors.transparent),
-                            const VerticalDivider(width: 12, thickness: 1.5),
-                          ],
+                  return Row(
+                    children: [
+                      SizedBox(
+                        width: activeSidebarWidth,
+                        child: const Sidebar(),
+                      ),
+                      MouseRegion(
+                        cursor: SystemMouseCursors.resizeColumn,
+                        child: GestureDetector(
+                          behavior: HitTestBehavior.translucent,
+                          onHorizontalDragUpdate: (details) {
+                            _sidebarWidthNotifier.value =
+                                (_sidebarWidthNotifier.value + details.delta.dx)
+                                    .clamp(minSidebarWidth, maxSidebarWidth);
+                          },
+                          onHorizontalDragEnd: (_) {
+                            ref.read(sidebarWidthProvider.notifier).state =
+                                _sidebarWidthNotifier.value;
+                          },
+                          child: SizedBox(
+                            width: 12,
+                            child: Stack(
+                              alignment: Alignment.center,
+                              children: [
+                                Container(color: Colors.transparent),
+                                const VerticalDivider(
+                                  width: 12,
+                                  thickness: 1.5,
+                                ),
+                              ],
+                            ),
+                          ),
                         ),
                       ),
-                    ),
-                  ),
-                  Expanded(
-                    child: config == null
-                        ? Center(
-                            child: Padding(
-                              padding: const EdgeInsets.all(24.0),
-                              child: Column(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  Icon(
-                                    Icons.folder_special,
-                                    size: 64,
-                                    color: Colors.grey.shade600,
+                      Expanded(
+                        child: config == null
+                            ? Center(
+                                child: Padding(
+                                  padding: const EdgeInsets.all(24.0),
+                                  child: Column(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      Icon(
+                                        Icons.folder_special,
+                                        size: 64,
+                                        color: Colors.grey.shade600,
+                                      ),
+                                      const SizedBox(height: 16),
+                                      const Text(
+                                        'Create or select a project context configuration.',
+                                        style: TextStyle(
+                                          fontSize: 16,
+                                          fontWeight: FontWeight.bold,
+                                        ),
+                                      ),
+                                    ],
                                   ),
-                                  const SizedBox(height: 16),
-                                  const Text(
-                                    'Create or select a project context configuration.',
-                                    style: TextStyle(
-                                      fontSize: 16,
-                                      fontWeight: FontWeight.bold,
+                                ),
+                              )
+                            : Column(
+                                crossAxisAlignment: CrossAxisAlignment.stretch,
+                                children: [
+                                  _buildHeader(context, ref, config),
+                                  const Expanded(
+                                    child: Material(
+                                      color: Colors.transparent,
+                                      clipBehavior: Clip.hardEdge,
+                                      child: ProjectTreeView(),
                                     ),
                                   ),
+                                  const BottomBar(),
                                 ],
                               ),
-                            ),
-                          )
-                        : Column(
-                            crossAxisAlignment: CrossAxisAlignment.stretch,
-                            children: [
-                              _buildHeader(context, ref, config),
-                              const Expanded(
-                                child: Material(
-                                  color: Colors.transparent,
-                                  clipBehavior: Clip.hardEdge,
-                                  child: ProjectTreeView(),
-                                ),
-                              ),
-                              const BottomBar(),
-                            ],
-                          ),
-                  ),
-                ],
+                      ),
+                    ],
+                  );
+                },
               );
             },
           ),

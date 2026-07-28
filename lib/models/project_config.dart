@@ -1,6 +1,6 @@
 import 'agent_skill.dart';
 
-// Configuration model representing a unique project with its ignore, inclusions, skills, and creation date
+/// Configuration model representing a unique project profile with ignore patterns, inclusions, custom skills, and metadata.
 class ProjectConfig {
   ProjectConfig({
     required this.id,
@@ -13,7 +13,7 @@ class ProjectConfig {
     DateTime? createdAt,
   }) : createdAt = createdAt ?? DateTime.now();
 
-  // Decodes a configuration map with boundary safety checks, migration fallbacks, and error boundaries
+  /// Decodes a configuration map with boundary safety checks, migration fallbacks, and strict null checks.
   factory ProjectConfig.fromJson(Map<String, dynamic> json) {
     try {
       final String? id = json['id'] as String?;
@@ -38,6 +38,12 @@ class ProjectConfig {
                 .toList()
           : const [];
 
+      // Safe null check prevents TypeError if ignorePatterns key exists with null value
+      final dynamic rawIgnores = json['ignorePatterns'];
+      final List<String> parsedIgnores = rawIgnores != null
+          ? List<String>.from(rawIgnores as Iterable<dynamic>)
+          : const ['.git/**', 'node_modules/**', 'build/**'];
+
       return ProjectConfig(
         id: id,
         name: name,
@@ -45,9 +51,7 @@ class ProjectConfig {
         includedFiles: List<String>.from(
           json['includedFiles'] ?? const <String>[],
         ),
-        ignorePatterns: json.containsKey('ignorePatterns')
-            ? List<String>.from(json['ignorePatterns'])
-            : const ['.git/**', 'node_modules/**', 'build/**'],
+        ignorePatterns: parsedIgnores,
         selectedSkillIds: List<String>.from(
           json['selectedSkillIds'] ?? const <String>[],
         ),
@@ -55,7 +59,7 @@ class ProjectConfig {
         createdAt: parsedCreatedAt,
       );
     } catch (e) {
-      // Avoid raw failure by fallback parsing to protect user interface startup
+      // Fallback parsing protects application startup from corrupted configuration files
       return ProjectConfig(
         id: json['id'] as String? ?? 'corrupted_fallback',
         name: json['name'] as String? ?? 'Unreadable Config',
@@ -78,7 +82,7 @@ class ProjectConfig {
   final String rootPath;
   final List<String> selectedSkillIds;
 
-  // Clones existing project state structures while applying new fields safely
+  /// Clones existing project state structures while applying updated fields safely.
   ProjectConfig copyWith({
     String? id,
     String? name,
@@ -101,7 +105,7 @@ class ProjectConfig {
     );
   }
 
-  // Serializes model properties to dynamic JSON parameters
+  /// Serializes instance attributes to a JSON map structure.
   Map<String, dynamic> toJson() {
     return {
       'id': id,

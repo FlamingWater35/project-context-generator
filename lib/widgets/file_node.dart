@@ -6,8 +6,13 @@ import '../providers/app_state.dart';
 
 /// Renders an individual tree node row item with file-type-aware icons, depth indentation guide lines, and inline action buttons.
 class FileNodeWidget extends ConsumerWidget {
-  const FileNodeWidget({super.key, required this.item});
+  const FileNodeWidget({
+    super.key,
+    required this.item,
+    required this.activeParentDirectories,
+  });
 
+  final Set<String> activeParentDirectories;
   final FlatTreeItem item;
 
   /// Helper evaluating file extension or folder type to return distinct visual icons.
@@ -81,15 +86,6 @@ class FileNodeWidget extends ConsumerWidget {
     }
 
     return Icon(iconData, size: 20, color: iconColor);
-  }
-
-  /// Checks if any nested children under this node are checked in O(1) set lookups.
-  bool _hasIncludedChildren(TreeNode node, Set<String> includedSet) {
-    if (!node.isDirectory) return includedSet.contains(node.relativePath);
-    for (final child in node.children) {
-      if (_hasIncludedChildren(child, includedSet)) return true;
-    }
-    return false;
   }
 
   /// Toggles multi-selection highlight state for batch processing.
@@ -210,8 +206,10 @@ class FileNodeWidget extends ConsumerWidget {
     final includedSet = ref.watch(selectedIncludedFilesSetProvider);
     final isIncluded =
         !node.isDirectory && includedSet.contains(node.relativePath);
+
+    // O(1) set lookup replaces recursive subtree traversal
     final hasIncluded = node.isDirectory
-        ? _hasIncludedChildren(node, includedSet)
+        ? activeParentDirectories.contains(node.relativePath)
         : isIncluded;
     final controller = ref.read(appStateControllerProvider);
 
@@ -248,7 +246,6 @@ class FileNodeWidget extends ConsumerWidget {
           ),
           child: Row(
             children: [
-              // Structural Depth Indentation Guides (Explicit height matches tight row padding)
               for (int i = 0; i < item.depth; i++)
                 const SizedBox(
                   width: 22,
@@ -300,7 +297,6 @@ class FileNodeWidget extends ConsumerWidget {
                           },
                   ),
                 ),
-                // Explicit padding between checkbox and file icon
                 const SizedBox(width: 12),
               ],
 
@@ -350,7 +346,6 @@ class FileNodeWidget extends ConsumerWidget {
 
               const SizedBox(width: 8),
 
-              // Folder selection dropdown menu button (for directories)
               if (node.isDirectory)
                 PopupMenuButton<String>(
                   icon: Icon(
@@ -387,7 +382,6 @@ class FileNodeWidget extends ConsumerWidget {
                   ],
                 ),
 
-              // Multi-select toggle button
               IconButton(
                 icon: Icon(
                   isHighlighted
@@ -404,7 +398,6 @@ class FileNodeWidget extends ConsumerWidget {
                 onPressed: () => _toggleMultiSelect(ref),
               ),
 
-              // Ignore Options IconButton
               Builder(
                 builder: (btnContext) => IconButton(
                   icon: Icon(

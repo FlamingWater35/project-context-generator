@@ -73,7 +73,6 @@ class _IgnoreRule {
       pStr = pStr.substring(0, pStr.length - 1);
     }
 
-    // Properly strip trailing wildcard suffixes to get clean base path pattern
     String basePattern = pStr;
     if (basePattern.endsWith('/**')) {
       basePattern = basePattern.substring(0, basePattern.length - 3);
@@ -109,7 +108,8 @@ class _IgnoreRule {
       } else {
         if (!onlyDirs) {
           rootGlob = Glob(basePattern, context: p.posix);
-          nestedGlob = Glob('**/$basePattern', context: p.posix);
+          nestedGlob =
+              null; // Do NOT match nested paths for root-anchored rules
         }
         dirGlob = Glob('$basePattern/**', context: p.posix);
         pruneGlob = Glob(basePattern, context: p.posix);
@@ -223,36 +223,6 @@ class FsService {
     }
   }
 
-  /// Safe file reader processing content boundaries, checking file size and binary headers.
-  Future<String> readFile(String path) async {
-    final file = File(path);
-    try {
-      if (!await file.exists()) return '';
-
-      final stat = await file.stat();
-      if (stat.size > _maxFileSizeBytes) {
-        return '<File too large (${(stat.size / 1024 / 1024).toStringAsFixed(2)} MB)>';
-      }
-
-      final raf = await file.open();
-      final headerBytes = await raf.read(8192);
-      await raf.close();
-
-      if (_isBinaryDataSync(headerBytes)) {
-        return '<Binary file>';
-      }
-
-      return await file.readAsString();
-    } catch (e) {
-      return '<Error reading file: $e>';
-    }
-  }
-
-  /// Traverses structures recursively to list file paths beneath a target parent.
-  List<String> getRecursiveFiles(TreeNode dirNode) {
-    return dirNode.getAllFilePaths();
-  }
-
   /// Synchronous prompt assembly logic designed for background Isolate targets.
   static PromptBuildResult _buildPromptContextSync(PromptBuildParams params) {
     final rootDir = Directory(params.rootPath);
@@ -357,7 +327,6 @@ class FsService {
       buffer.writeln('--- End File ---');
     }
 
-    // Append selected Agent Skills
     if (params.selectedSkills.isNotEmpty) {
       sections.add(
         PromptSectionData(
@@ -510,7 +479,6 @@ class FsService {
 
             if (!skip) {
               paths.add(relPath);
-              // Direct type promotion check prevents runtime TypeError on Directory cast
               if (entity is Directory) {
                 traverse(entity);
               }
