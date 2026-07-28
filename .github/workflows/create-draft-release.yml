@@ -2,7 +2,9 @@ name: Build, Release, and Deploy
 
 on:
   push:
-    branches: [main]
+    tags:
+      - "v*"
+      - "*"
 
 env:
   REPO_NAME: project-context-generator
@@ -119,8 +121,8 @@ jobs:
             artifacts/**/*.AppImage
           draft: true
           allowUpdates: true
-          tag: "dev-build-${{ github.run_number }}"
-          name: "Version ${{ needs.build_windows.outputs.app_version }}"
+          tag: ${{ github.ref_name }}
+          name: "Release ${{ github.ref_name }} (Version ${{ needs.build_windows.outputs.app_version }})"
           body: |
-            Automated development build.
+            Automated release build for tag `${{ github.ref_name }}`.
             Triggered by commit: `${{ github.sha }}`

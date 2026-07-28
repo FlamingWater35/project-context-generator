@@ -22,7 +22,7 @@ A desktop application for generating structured context prompts from project fil
 3. **Configure Ignores** – Click the "Ignores" button to set up exclusion patterns (defaults provided for common directories like `.git`, `node_modules`, `build`)
 4. **Select Files** – Check the files you want to include in the context (use the folder actions to select/deselect recursively)
 5. **Check for Changes** – Click "Check for Changes" to scan for new files
-6. **Generate** – Click "Generate & Copy" to create the context prompt.
+6. **Generate** – Click "Generate & Copy" to create the context prompt
 
 ---
 
