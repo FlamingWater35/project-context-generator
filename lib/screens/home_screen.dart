@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../models/project_config.dart';
 import '../providers/app_state.dart';
+import '../widgets/bottom_bar.dart';
 import '../widgets/generate_button.dart';
 import '../widgets/ignore_list.dart';
 import '../widgets/sidebar.dart';
@@ -11,7 +12,7 @@ import '../widgets/skills_dialog.dart';
 import '../widgets/snackbar.dart';
 import '../widgets/tree_view.dart';
 
-// Visual primary home screen containing sidebar controls, top header bar, and project workspace tree view
+// Visual primary home screen containing sidebar controls, top header bar, tree view, and bottom metrics status bar
 class HomeScreen extends ConsumerStatefulWidget {
   const HomeScreen({super.key});
 
@@ -322,6 +323,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                               child: ProjectTreeView(),
                             ),
                           ),
+                          const BottomBar(),
                         ],
                       ),
               ),

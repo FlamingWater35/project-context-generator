@@ -304,6 +304,30 @@ final fileTreeProvider = FutureProvider<TreeNode?>((ref) async {
   }
 });
 
+/// Computes prompt statistics (tokens, lines, file count, size) in background isolate for live display in bottom status bar
+final promptStatsProvider = FutureProvider<PromptBuildResult?>((ref) async {
+  final config = ref.watch(selectedConfigProvider);
+  if (config == null || config.rootPath.isEmpty) return null;
+
+  final selectedSkillIds = config.selectedSkillIds.toSet();
+  final allSkills = ref.watch(allProjectSkillsProvider);
+  final selectedSkills = allSkills
+      .where((s) => selectedSkillIds.contains(s.id))
+      .toList();
+
+  final fsService = ref.read(fsServiceProvider);
+
+  final params = PromptBuildParams(
+    projectName: config.name,
+    rootPath: config.rootPath,
+    includedFiles: config.includedFiles,
+    selectedSkills: selectedSkills,
+    ignorePatterns: config.ignorePatterns,
+  );
+
+  return await fsService.buildPromptContext(params);
+});
+
 // App-wide provider containing high-level directory structural modifiers
 final appStateControllerProvider = Provider((ref) => AppStateController(ref));
 

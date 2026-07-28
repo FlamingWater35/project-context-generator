@@ -1,12 +1,12 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../providers/app_state.dart';
 import '../services/fs_service.dart';
-import 'prompt_viewer_dialog.dart';
 import 'snackbar.dart';
 
-// Button that triggers background isolate prompt compilation and opens the prompt viewing menu immediately
+/// Button that compiles context prompt in background isolate and copies it directly to system clipboard
 class GenerateButton extends ConsumerStatefulWidget {
   const GenerateButton({super.key});
 
@@ -17,13 +17,31 @@ class GenerateButton extends ConsumerStatefulWidget {
 class _GenerateButtonState extends ConsumerState<GenerateButton> {
   bool _isLoading = false;
 
-  // Verifies disk configurations and processes text extraction with user decision options
+  /// Verifies disk snapshot changes and triggers direct prompt generation & copy
   Future<void> _handleGenerate() async {
     setState(() => _isLoading = true);
 
     try {
       final config = ref.read(selectedConfigProvider);
-      if (config == null || config.rootPath.isEmpty) return;
+      if (config == null || config.rootPath.isEmpty) {
+        if (mounted) {
+          showErrorSnackBar(
+            context,
+            'Please select a valid root folder first.',
+          );
+        }
+        return;
+      }
+
+      if (config.includedFiles.isEmpty) {
+        if (mounted) {
+          showErrorSnackBar(
+            context,
+            'No files selected to include in prompt context.',
+          );
+        }
+        return;
+      }
 
       final fs = ref.read(fsServiceProvider);
       final snapshots = ref.read(projectSnapshotsProvider);
@@ -54,11 +72,11 @@ class _GenerateButtonState extends ConsumerState<GenerateButton> {
                 ),
                 TextButton(
                   onPressed: () => Navigator.pop(context, 'copy_anyway'),
-                  child: const Text('View Anyway'),
+                  child: const Text('Copy Anyway'),
                 ),
                 FilledButton(
                   onPressed: () => Navigator.pop(context, 'refresh'),
-                  child: const Text('Refresh & View'),
+                  child: const Text('Refresh & Copy'),
                 ),
               ],
             ),
@@ -67,14 +85,14 @@ class _GenerateButtonState extends ConsumerState<GenerateButton> {
           if (actionChoice == 'refresh') {
             await ref.read(appStateControllerProvider).acknowledgeChanges();
             ref.invalidate(fileTreeProvider);
-            if (mounted) _performGeneratePrompt();
+            if (mounted) await _performGenerateAndCopyPrompt();
           } else if (actionChoice == 'copy_anyway') {
-            if (mounted) _performGeneratePrompt();
+            if (mounted) await _performGenerateAndCopyPrompt();
           }
         }
       } else {
         if (mounted) {
-          _performGeneratePrompt();
+          await _performGenerateAndCopyPrompt();
         }
       }
     } catch (e) {
@@ -88,8 +106,8 @@ class _GenerateButtonState extends ConsumerState<GenerateButton> {
     }
   }
 
-  // Immediately launches PromptViewerDialog with a background future task
-  void _performGeneratePrompt() {
+  /// Compiles full prompt context in background isolate and copies directly to clipboard
+  Future<void> _performGenerateAndCopyPrompt() async {
     final config = ref.read(selectedConfigProvider);
     if (config == null) return;
 
@@ -110,20 +128,29 @@ class _GenerateButtonState extends ConsumerState<GenerateButton> {
         ignorePatterns: config.ignorePatterns,
       );
 
-      // Create future for background isolate prompt compilation
-      final promptFuture = fsService.buildPromptContext(params);
+      final result = await fsService.buildPromptContext(params);
 
-      // Open the preview dialog IMMEDIATELY
-      showDialog(
-        context: context,
-        builder: (_) => PromptViewerDialog(
-          projectName: config.name,
-          promptFuture: promptFuture,
-        ),
-      );
+      if (result.fileCount == 0) {
+        if (mounted) {
+          showErrorSnackBar(
+            context,
+            'No files selected or all selected files are ignored.',
+          );
+        }
+        return;
+      }
+
+      await Clipboard.setData(ClipboardData(text: result.promptText));
+
+      if (mounted) {
+        showSuccessSnackBar(
+          context,
+          'Prompt generated and copied to clipboard! (${result.fileCount} files, ${result.totalLines} lines)',
+        );
+      }
     } catch (e) {
       if (mounted) {
-        showErrorSnackBar(context, 'Failed to launch prompt preview: $e');
+        showErrorSnackBar(context, 'Failed to copy prompt to clipboard: $e');
       }
     }
   }
@@ -140,8 +167,8 @@ class _GenerateButtonState extends ConsumerState<GenerateButton> {
                 color: Colors.white,
               ),
             )
-          : const Icon(Icons.visibility),
-      label: Text(_isLoading ? 'Generating...' : 'Generate Prompt'),
+          : const Icon(Icons.copy),
+      label: Text(_isLoading ? 'Generating...' : 'Generate & Copy'),
       onPressed: _isLoading ? null : _handleGenerate,
     );
   }
