@@ -2,6 +2,7 @@ import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:silky_scroll/silky_scroll.dart';
 import 'package:uuid/uuid.dart';
 
 import '../models/agent_skill.dart';
@@ -255,7 +256,7 @@ class _SkillsDialogState extends ConsumerState<SkillsDialog> {
                     child: Scrollbar(
                       controller: _scrollController,
                       thumbVisibility: true,
-                      child: ListView.separated(
+                      child: SilkyListView.separated(
                         controller: _scrollController,
                         itemCount: allSkills.length,
                         separatorBuilder: (ctx, i) => Divider(

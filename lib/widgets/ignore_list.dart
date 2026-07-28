@@ -2,6 +2,7 @@ import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:silky_scroll/silky_scroll.dart';
 
 import '../models/project_config.dart';
 import '../providers/app_state.dart';
@@ -163,7 +164,7 @@ class _IgnoreListDialogState extends ConsumerState<IgnoreListDialog> {
                           : Scrollbar(
                               controller: _scrollController,
                               thumbVisibility: true,
-                              child: ListView.separated(
+                              child: SilkyListView.separated(
                                 controller: _scrollController,
                                 padding: EdgeInsets.zero,
                                 itemCount: ignores.length,
@@ -210,34 +211,32 @@ class _IgnoreListDialogState extends ConsumerState<IgnoreListDialog> {
                       child: Scrollbar(
                         controller: _presetScrollController,
                         thumbVisibility: true,
-                        child: ListView(
+                        child: SilkySingleChildScrollView(
                           controller: _presetScrollController,
-                          children: [
-                            Wrap(
-                              spacing: 6,
-                              runSpacing: 6,
-                              children: commonPresets.map((preset) {
-                                final isAdded = ignores.contains(preset);
-                                return FilterChip(
-                                  visualDensity: VisualDensity.compact,
-                                  label: Text(
-                                    preset,
-                                    style: const TextStyle(fontSize: 11),
-                                  ),
-                                  selected: isAdded,
-                                  onSelected: (selected) {
-                                    setState(() {
-                                      if (selected) {
-                                        ignores.add(preset);
-                                      } else {
-                                        ignores.remove(preset);
-                                      }
-                                    });
-                                  },
-                                );
-                              }).toList(),
-                            ),
-                          ],
+                          child: Wrap(
+                            spacing: 6,
+                            runSpacing: 6,
+                            children: commonPresets.map((preset) {
+                              final isAdded = ignores.contains(preset);
+                              return FilterChip(
+                                visualDensity: VisualDensity.compact,
+                                label: Text(
+                                  preset,
+                                  style: const TextStyle(fontSize: 11),
+                                ),
+                                selected: isAdded,
+                                onSelected: (selected) {
+                                  setState(() {
+                                    if (selected) {
+                                      ignores.add(preset);
+                                    } else {
+                                      ignores.remove(preset);
+                                    }
+                                  });
+                                },
+                              );
+                            }).toList(),
+                          ),
                         ),
                       ),
                     ),

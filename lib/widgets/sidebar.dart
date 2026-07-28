@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:silky_scroll/silky_scroll.dart';
 
 import '../models/project_config.dart';
 import '../providers/app_state.dart';
@@ -277,7 +278,7 @@ class _SidebarState extends ConsumerState<Sidebar> {
               child: Scrollbar(
                 controller: _scrollController,
                 thumbVisibility: true,
-                child: ListView.builder(
+                child: SilkyListView.builder(
                   controller: _scrollController,
                   padding: const EdgeInsets.only(
                     top: 8,

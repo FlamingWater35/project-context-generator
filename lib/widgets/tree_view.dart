@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:silky_scroll/silky_scroll.dart';
 
 import '../models/tree_node.dart';
 import '../providers/app_state.dart';
@@ -200,7 +201,7 @@ class _ProjectTreeViewState extends ConsumerState<ProjectTreeView> {
                   return Scrollbar(
                     controller: _horizontalController,
                     thumbVisibility: true,
-                    child: SingleChildScrollView(
+                    child: SilkySingleChildScrollView(
                       controller: _horizontalController,
                       scrollDirection: Axis.horizontal,
                       child: AnimatedContainer(
@@ -213,7 +214,7 @@ class _ProjectTreeViewState extends ConsumerState<ProjectTreeView> {
                         child: Scrollbar(
                           controller: _scrollController,
                           thumbVisibility: true,
-                          child: SingleChildScrollView(
+                          child: SilkySingleChildScrollView(
                             controller: _scrollController,
                             padding: const EdgeInsets.only(
                               left: 16.0,
