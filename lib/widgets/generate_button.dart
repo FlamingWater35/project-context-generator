@@ -7,7 +7,7 @@ import '../models/tree_node.dart';
 import '../providers/app_state.dart';
 import 'snackbar.dart';
 
-// Button that triggers directory sync-checks and copies project structure with contents to the clipboard
+// Button that triggers directory sync-checks and copies project structure, file contents, and selected agent skills to the clipboard
 class GenerateButton extends ConsumerStatefulWidget {
   const GenerateButton({super.key});
 
@@ -41,7 +41,6 @@ class _GenerateButtonState extends ConsumerState<GenerateButton> {
 
       if (hasChanged) {
         if (mounted) {
-          // Three-option action flow allowing stale copies if preferred
           final String? actionChoice = await showDialog<String>(
             context: context,
             builder: (context) => AlertDialog(
@@ -90,7 +89,7 @@ class _GenerateButtonState extends ConsumerState<GenerateButton> {
     }
   }
 
-  // Extracts verified documents, constructs output trees, and copies text contents onto clipboard
+  // Extracts verified documents, constructs output trees, attaches selected agent skills, and copies text contents onto clipboard
   Future<void> _performCopy() async {
     final config = ref.read(selectedConfigProvider);
     if (config == null) return;
@@ -136,6 +135,30 @@ class _GenerateButtonState extends ConsumerState<GenerateButton> {
         buffer.writeln('--- File: $fileRelPath ---');
         buffer.writeln(content);
         buffer.writeln('--- End File ---');
+      }
+
+      // Append selected Agent Skills to prompt output
+      final selectedSkillIds = config.selectedSkillIds.toSet();
+      if (selectedSkillIds.isNotEmpty) {
+        final allSkills = ref.read(allProjectSkillsProvider);
+        final selectedSkills = allSkills
+            .where((s) => selectedSkillIds.contains(s.id))
+            .toList();
+
+        if (selectedSkills.isNotEmpty) {
+          buffer.writeln('--- AGENT SKILLS ---');
+          for (final skill in selectedSkills) {
+            buffer.writeln('--- Skill: ${skill.name} ---');
+            if (skill.description.isNotEmpty) {
+              buffer.writeln('Description: ${skill.description}');
+            }
+            if (skill.sourcePath != null && skill.sourcePath!.isNotEmpty) {
+              buffer.writeln('Source: ${skill.sourcePath}');
+            }
+            buffer.writeln(skill.content);
+            buffer.writeln('--- End Skill ---');
+          }
+        }
       }
 
       await Clipboard.setData(ClipboardData(text: buffer.toString()));

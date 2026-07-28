@@ -157,6 +157,8 @@ class _ProjectContextGeneratorAppState
       }
 
       final sidebarWidth = ref.read(sidebarWidthProvider);
+      final selectedConfigId = ref.read(selectedConfigIdProvider);
+      final sortOption = ref.read(projectSortOptionProvider);
       final configService = ref.read(configServiceProvider);
 
       await configService.saveWindowState({
@@ -167,6 +169,8 @@ class _ProjectContextGeneratorAppState
         'isMaximized': isMaximized,
         'isFullScreen': isFullScreen,
         'sidebarWidth': sidebarWidth,
+        'lastSelectedProjectId': selectedConfigId,
+        'projectSortOption': sortOption.name,
       });
     } catch (e) {
       debugPrint('Failed to serialize and save window configurations: $e');
@@ -181,12 +185,6 @@ class _ProjectContextGeneratorAppState
 
   @override
   Widget build(BuildContext context) {
-    ref.listen(configsProvider, (prev, next) {
-      if (next.isNotEmpty && ref.read(selectedConfigIdProvider) == null) {
-        ref.read(appStateControllerProvider).selectConfig(next.first.id);
-      }
-    });
-
     return MaterialApp(
       title: 'Project Context Generator',
       theme: ThemeData.dark(useMaterial3: true),

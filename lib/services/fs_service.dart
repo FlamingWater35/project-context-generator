@@ -5,6 +5,7 @@ import 'package:flutter/foundation.dart';
 import 'package:glob/glob.dart';
 import 'package:path/path.dart' as p;
 
+import '../models/agent_skill.dart';
 import '../models/tree_node.dart';
 
 // Helper evaluating pattern structures to parse files matching ignore lists
@@ -99,7 +100,7 @@ class _IgnoreRule {
   }
 }
 
-// Background utility service analyzing directories, matching ignores, and processing files
+// Background utility service analyzing directories, matching ignores, and processing files & skills
 class FsService {
   static const int _maxFileSizeBytes = 1024 * 1024;
 
@@ -137,6 +138,20 @@ class FsService {
     } catch (e) {
       debugPrint('Background Isolate directory parsing failed: $e');
       return null;
+    }
+  }
+
+  /// Scans the project directory to detect agent skill files (e.g. SKILL.md, .prompt.md, .cursor/rules, etc.).
+  Future<List<AgentSkill>> detectSkills(String rootPath) async {
+    if (rootPath.isEmpty) return const [];
+    try {
+      final dir = Directory(rootPath);
+      if (!dir.existsSync()) return const [];
+
+      return await Isolate.run(() => _detectSkillsSync(rootPath));
+    } catch (e) {
+      debugPrint('Background Isolate skill discovery failed: $e');
+      return const [];
     }
   }
 
@@ -238,12 +253,11 @@ class FsService {
               }
             }
           } catch (e) {
-            // Inaccessible nested file or folder - skip silently to prevent scan failure
             continue;
           }
         }
       } catch (e) {
-        // Inaccessible directory - skip silently to prevent scan failure
+        // Inaccessible directory - skip
       }
     }
 
@@ -328,12 +342,11 @@ class FsService {
               if (populatedChild.isNew) anyChildIsNew = true;
             }
           } catch (e) {
-            // Inaccessible child path - skip silently to maintain scan execution
             continue;
           }
         }
       } catch (e) {
-        // Inaccessible parent folder - skip silently to maintain scan execution
+        // Inaccessible folder
       }
 
       children.removeWhere(
@@ -354,6 +367,136 @@ class FsService {
 
     final rootNode = buildNode(canonicalDir, '');
     return populateChildren(rootNode);
+  }
+
+  /// Synchronous skill discovery logic designed for background Isolate runners.
+  static List<AgentSkill> _detectSkillsSync(String rootPath) {
+    final List<AgentSkill> detected = [];
+    final dir = Directory(rootPath);
+    if (!dir.existsSync()) return detected;
+
+    String canonicalRoot;
+    try {
+      canonicalRoot = _normalizeDriveLetter(dir.resolveSymbolicLinksSync());
+    } catch (_) {
+      canonicalRoot = _normalizeDriveLetter(rootPath);
+    }
+
+    final Set<String> ignoreFolders = {
+      '.git',
+      'node_modules',
+      'build',
+      '.dart_tool',
+      'dist',
+      'target',
+      'vendor',
+      '.idea',
+      '.vscode',
+    };
+
+    void traverse(Directory currentDir) {
+      try {
+        final entities = currentDir.listSync(followLinks: false);
+        for (final entity in entities) {
+          try {
+            final baseName = p.basename(entity.path);
+
+            if (entity is Directory) {
+              if (ignoreFolders.contains(baseName)) continue;
+              traverse(entity);
+            } else if (entity is File) {
+              final lowerName = baseName.toLowerCase();
+              final normalizedPath = _normalizeDriveLetter(entity.path);
+              final relPath = p
+                  .relative(normalizedPath, from: canonicalRoot)
+                  .replaceAll('\\', '/');
+
+              final bool isSkillFile =
+                  lowerName == 'skill.md' ||
+                  lowerName == 'skills.md' ||
+                  lowerName.endsWith('.prompt.md') ||
+                  relPath.contains('.github/skills/') ||
+                  relPath.contains('.claude/skills/') ||
+                  relPath.contains('.agents/skills/') ||
+                  relPath.contains('.cursor/rules/') ||
+                  relPath.contains('.windsurfrules');
+
+              if (isSkillFile) {
+                try {
+                  final stat = entity.statSync();
+                  if (stat.size <= _maxFileSizeBytes) {
+                    final content = entity.readAsStringSync();
+                    final frontmatter = _parseFrontmatter(content);
+
+                    String name = frontmatter['name'] ?? '';
+                    if (name.isEmpty) {
+                      final parentDirName = p.basename(entity.parent.path);
+                      if (lowerName == 'skill.md' && parentDirName.isNotEmpty) {
+                        name = parentDirName;
+                      } else {
+                        name = p.basenameWithoutExtension(baseName);
+                      }
+                    }
+
+                    String description = frontmatter['description'] ?? '';
+                    if (description.isEmpty) {
+                      description = 'Agent skill from $relPath';
+                    }
+
+                    detected.add(
+                      AgentSkill(
+                        id: relPath,
+                        name: name,
+                        description: description,
+                        content: content,
+                        sourcePath: relPath,
+                        isCustom: false,
+                      ),
+                    );
+                  }
+                } catch (e) {
+                  // Ignore unreadable skill file
+                }
+              }
+            }
+          } catch (_) {
+            continue;
+          }
+        }
+      } catch (_) {}
+    }
+
+    traverse(Directory(canonicalRoot));
+    return detected;
+  }
+
+  /// Parses YAML frontmatter headers from markdown content without requiring external YAML dependencies.
+  static Map<String, String> _parseFrontmatter(String text) {
+    final Map<String, String> result = {};
+    final trimmed = text.trimLeft();
+    if (!trimmed.startsWith('---')) return result;
+
+    final endFrontmatter = trimmed.indexOf('---', 3);
+    if (endFrontmatter == -1) return result;
+
+    final yamlContent = trimmed.substring(3, endFrontmatter);
+    final lines = yamlContent.split('\n');
+
+    for (final line in lines) {
+      final colonIdx = line.indexOf(':');
+      if (colonIdx != -1) {
+        final key = line.substring(0, colonIdx).trim().toLowerCase();
+        var val = line.substring(colonIdx + 1).trim();
+        if ((val.startsWith('"') && val.endsWith('"')) ||
+            (val.startsWith("'") && val.endsWith("'"))) {
+          if (val.length >= 2) {
+            val = val.substring(1, val.length - 1);
+          }
+        }
+        result[key] = val;
+      }
+    }
+    return result;
   }
 
   // Analyzes headers to determine if files contain binary rather than text data

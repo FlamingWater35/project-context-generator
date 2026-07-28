@@ -7,10 +7,11 @@ import '../providers/app_state.dart';
 import '../widgets/generate_button.dart';
 import '../widgets/ignore_list.dart';
 import '../widgets/sidebar.dart';
+import '../widgets/skills_dialog.dart';
 import '../widgets/snackbar.dart';
 import '../widgets/tree_view.dart';
 
-// Visual primary home screen containing sidebar controls and the project workspace tree view
+// Visual primary home screen containing sidebar controls, top header bar, and project workspace tree view
 class HomeScreen extends ConsumerStatefulWidget {
   const HomeScreen({super.key});
 
@@ -82,7 +83,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     }
   }
 
-  // Assembles header details cards showing file state, target folder paths, and action controls
+  // Assembles header details cards showing file state, target folder paths, skills, and action controls
   Widget _buildHeader(
     BuildContext context,
     WidgetRef ref,
@@ -95,6 +96,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
       child: LayoutBuilder(
         builder: (context, headerConstraints) {
           final isNarrow = headerConstraints.maxWidth < 600;
+          final skillCount = config.selectedSkillIds.length;
 
           return Padding(
             padding: const EdgeInsets.all(16.0),
@@ -138,6 +140,20 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                               );
                             },
                           ),
+                          ElevatedButton.icon(
+                            icon: const Icon(Icons.psychology),
+                            label: Text(
+                              skillCount == 0
+                                  ? 'Skills'
+                                  : 'Skills ($skillCount)',
+                            ),
+                            onPressed: () {
+                              showDialog(
+                                context: context,
+                                builder: (_) => const SkillsDialog(),
+                              );
+                            },
+                          ),
                           const GenerateButton(),
                           ElevatedButton.icon(
                             icon: const Icon(Icons.refresh, size: 18),
@@ -166,7 +182,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                               maxLines: 1,
                             ),
                           ),
-                          const SizedBox(width: 16),
+                          const SizedBox(width: 12),
                           ElevatedButton.icon(
                             icon: const Icon(Icons.settings),
                             label: const Text('Ignores'),
@@ -175,6 +191,21 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                                 context: context,
                                 builder: (_) =>
                                     IgnoreListDialog(config: config),
+                              );
+                            },
+                          ),
+                          const SizedBox(width: 8),
+                          ElevatedButton.icon(
+                            icon: const Icon(Icons.psychology),
+                            label: Text(
+                              skillCount == 0
+                                  ? 'Skills'
+                                  : 'Skills ($skillCount)',
+                            ),
+                            onPressed: () {
+                              showDialog(
+                                context: context,
+                                builder: (_) => const SkillsDialog(),
                               );
                             },
                           ),

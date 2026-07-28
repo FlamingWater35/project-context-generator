@@ -5,7 +5,7 @@ import '../models/project_config.dart';
 import '../providers/app_state.dart';
 import 'smooth_scroll.dart';
 
-// Sidebar panel presenting lists of configured projects, active project switching, and configuration creations
+// Sidebar panel presenting lists of configured projects, project sorting, active project switching, and configuration creations
 class Sidebar extends ConsumerStatefulWidget {
   const Sidebar({super.key});
 
@@ -148,12 +148,21 @@ class _SidebarState extends ConsumerState<Sidebar> {
   @override
   Widget build(BuildContext context) {
     final allConfigs = ref.watch(configsProvider);
+    final sortOption = ref.watch(projectSortOptionProvider);
     var configs = allConfigs.toList();
 
+    // Sort projects dynamically based on the active ProjectSortOption
     configs.sort((a, b) {
-      final int cmp = a.name.toLowerCase().compareTo(b.name.toLowerCase());
-      if (cmp != 0) return cmp;
-      return a.id.compareTo(b.id);
+      switch (sortOption) {
+        case ProjectSortOption.nameAsc:
+          return a.name.toLowerCase().compareTo(b.name.toLowerCase());
+        case ProjectSortOption.nameDesc:
+          return b.name.toLowerCase().compareTo(a.name.toLowerCase());
+        case ProjectSortOption.dateNewest:
+          return b.createdAt.compareTo(a.createdAt);
+        case ProjectSortOption.dateOldest:
+          return a.createdAt.compareTo(b.createdAt);
+      }
     });
 
     if (_searchQuery.trim().isNotEmpty) {
@@ -182,8 +191,60 @@ class _SidebarState extends ConsumerState<Sidebar> {
                     style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
                   ),
                   const Spacer(),
+                  PopupMenuButton<ProjectSortOption>(
+                    icon: const Icon(Icons.sort, size: 20),
+                    tooltip: 'Sort Projects',
+                    onSelected: (option) {
+                      ref
+                          .read(appStateControllerProvider)
+                          .setSortOption(option);
+                    },
+                    itemBuilder: (context) => [
+                      PopupMenuItem(
+                        value: ProjectSortOption.nameAsc,
+                        child: const Row(
+                          children: [
+                            Icon(Icons.sort_by_alpha, size: 18),
+                            SizedBox(width: 8),
+                            Text('Name (A to Z)'),
+                          ],
+                        ),
+                      ),
+                      PopupMenuItem(
+                        value: ProjectSortOption.nameDesc,
+                        child: const Row(
+                          children: [
+                            Icon(Icons.sort_by_alpha, size: 18),
+                            SizedBox(width: 8),
+                            Text('Name (Z to A)'),
+                          ],
+                        ),
+                      ),
+                      PopupMenuItem(
+                        value: ProjectSortOption.dateNewest,
+                        child: const Row(
+                          children: [
+                            Icon(Icons.calendar_today, size: 18),
+                            SizedBox(width: 8),
+                            Text('Date (Newest First)'),
+                          ],
+                        ),
+                      ),
+                      PopupMenuItem(
+                        value: ProjectSortOption.dateOldest,
+                        child: const Row(
+                          children: [
+                            Icon(Icons.calendar_today, size: 18),
+                            SizedBox(width: 8),
+                            Text('Date (Oldest First)'),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
                   IconButton(
                     icon: const Icon(Icons.add),
+                    tooltip: 'New Project',
                     onPressed: () {
                       _showCreateDialog(context, ref);
                     },

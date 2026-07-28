@@ -5,10 +5,14 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_riverpod/legacy.dart';
 import 'package:uuid/uuid.dart';
 
+import '../models/agent_skill.dart';
 import '../models/project_config.dart';
 import '../models/tree_node.dart';
 import '../services/config_service.dart';
 import '../services/fs_service.dart';
+
+/// Available sorting modes for organizing project configurations in the sidebar.
+enum ProjectSortOption { nameAsc, nameDesc, dateNewest, dateOldest }
 
 // Provider pointing to the configuration database service helper
 final configServiceProvider = Provider((ref) => ConfigService());
@@ -18,6 +22,11 @@ final fsServiceProvider = Provider((ref) => FsService());
 
 // Global state controller for tracking user adjustments to the sidebar layout
 final sidebarWidthProvider = StateProvider<double>((ref) => 250.0);
+
+// State provider tracking the active project sorting option
+final projectSortOptionProvider = StateProvider<ProjectSortOption>(
+  (ref) => ProjectSortOption.nameAsc,
+);
 
 // Tracks identified disk snapshots per project ID to locate structural updates
 final projectSnapshotsProvider = StateProvider<Map<String, Set<String>>>(
@@ -43,9 +52,9 @@ class ConfigsNotifier extends StateNotifier<List<ProjectConfig>> {
 
   final ConfigService _configService;
   final Ref _ref;
-  Timer? _saveTimer;
   ProjectConfig? _pendingConfig;
   String? _pendingOldName;
+  Timer? _saveTimer;
 
   // Stores and appends a fresh project record directly into persistent storage
   Future<void> addConfig(String name) async {
@@ -53,6 +62,8 @@ class ConfigsNotifier extends StateNotifier<List<ProjectConfig>> {
       final newConfig = ProjectConfig(id: const Uuid().v4(), name: name);
       await _configService.saveConfig(newConfig);
       state = [...state, newConfig];
+
+      _ref.read(appStateControllerProvider).selectConfig(newConfig.id);
     } catch (e) {
       debugPrint('Error caught while creating new config configuration: $e');
     }
@@ -107,9 +118,8 @@ class ConfigsNotifier extends StateNotifier<List<ProjectConfig>> {
 
       final currentSelectedId = _ref.read(selectedConfigIdProvider);
       if (currentSelectedId == config.id) {
-        _ref.read(selectedConfigIdProvider.notifier).state = state.isNotEmpty
-            ? state.first.id
-            : null;
+        final newSelected = state.isNotEmpty ? state.first.id : null;
+        _ref.read(appStateControllerProvider).selectConfig(newSelected);
       }
 
       final snapshots = _ref.read(projectSnapshotsProvider.notifier);
@@ -121,10 +131,31 @@ class ConfigsNotifier extends StateNotifier<List<ProjectConfig>> {
     }
   }
 
-  // Asynchronously loads all previously stored project configs from local disk
+  // Asynchronously loads all previously stored project configs and restores the last opened project
   Future<void> _load() async {
     try {
       state = await _configService.loadConfigs();
+
+      final windowState = await _configService.loadWindowState();
+      if (windowState != null) {
+        final lastId = windowState['lastSelectedProjectId'] as String?;
+        if (lastId != null && state.any((c) => c.id == lastId)) {
+          _ref.read(selectedConfigIdProvider.notifier).state = lastId;
+        } else if (state.isNotEmpty) {
+          _ref.read(selectedConfigIdProvider.notifier).state = state.first.id;
+        }
+
+        final sortName = windowState['projectSortOption'] as String?;
+        if (sortName != null) {
+          final matchedOption = ProjectSortOption.values.firstWhere(
+            (e) => e.name == sortName,
+            orElse: () => ProjectSortOption.nameAsc,
+          );
+          _ref.read(projectSortOptionProvider.notifier).state = matchedOption;
+        }
+      } else if (state.isNotEmpty) {
+        _ref.read(selectedConfigIdProvider.notifier).state = state.first.id;
+      }
     } catch (e) {
       debugPrint('Failed loading saved configuration parameters: $e');
       state = const [];
@@ -149,6 +180,33 @@ final selectedConfigProvider = Provider<ProjectConfig?>((ref) {
   });
 
   return configs.first;
+});
+
+/// Asynchronously scans project root to discover agent skills in the codebase
+final detectedSkillsProvider = FutureProvider<List<AgentSkill>>((ref) async {
+  final config = ref.watch(selectedConfigProvider);
+  if (config == null || config.rootPath.isEmpty) return const [];
+
+  final fs = ref.read(fsServiceProvider);
+  return await fs.detectSkills(config.rootPath);
+});
+
+/// Exposes the unified collection of detected and custom skills for the current project
+final allProjectSkillsProvider = Provider<List<AgentSkill>>((ref) {
+  final config = ref.watch(selectedConfigProvider);
+  if (config == null) return const [];
+
+  final detected = ref.watch(detectedSkillsProvider).value ?? const [];
+  final custom = config.customSkills;
+
+  final Map<String, AgentSkill> map = {};
+  for (final skill in detected) {
+    map[skill.id] = skill;
+  }
+  for (final skill in custom) {
+    map[skill.id] = skill;
+  }
+  return map.values.toList();
 });
 
 // Caches and exposes checked paths as a Set to allow O(1) lookups during recursive rendering
@@ -252,10 +310,20 @@ class AppStateController {
 
   final Ref _ref;
 
-  // Handles sidebar target config selection changes and invalidates expansion state keys
+  // Handles sidebar target config selection changes and persists the selected project ID
   void selectConfig(String? id) {
     _ref.read(selectedConfigIdProvider.notifier).state = id;
     _ref.read(expansionStateProvider.notifier).state = const {};
+
+    if (id != null) {
+      _saveLastSelectedProject(id);
+    }
+  }
+
+  // Updates and persists the current project list sorting option
+  void setSortOption(ProjectSortOption option) {
+    _ref.read(projectSortOptionProvider.notifier).state = option;
+    _saveSortOption(option);
   }
 
   // Accepts and overrides directory metadata indicators to mark newly identified assets as loaded
@@ -296,6 +364,8 @@ class AppStateController {
     String? rootPath,
     List<String>? ignorePatterns,
     List<String>? includedFiles,
+    List<String>? selectedSkillIds,
+    List<AgentSkill>? customSkills,
   }) async {
     try {
       final current = _ref.read(selectedConfigProvider);
@@ -310,6 +380,8 @@ class AppStateController {
         rootPath: rootPath,
         ignorePatterns: ignorePatterns,
         includedFiles: includedFiles,
+        selectedSkillIds: selectedSkillIds,
+        customSkills: customSkills,
       );
 
       if (rootPath != null || ignorePatterns != null) {
@@ -321,6 +393,77 @@ class AppStateController {
           .updateConfig(updated, oldName: oldName);
     } catch (e) {
       debugPrint('Failed to apply configuration variations: $e');
+    }
+  }
+
+  // Toggles inclusion of a target agent skill for context prompt generation
+  Future<void> toggleSkillSelection(String skillId) async {
+    try {
+      final current = _ref.read(selectedConfigProvider);
+      if (current == null) return;
+      final set = current.selectedSkillIds.toSet();
+      if (set.contains(skillId)) {
+        set.remove(skillId);
+      } else {
+        set.add(skillId);
+      }
+      await updateCurrentConfig(selectedSkillIds: set.toList());
+    } catch (e) {
+      debugPrint('Failed to toggle skill selection status: $e');
+    }
+  }
+
+  // Selects all available skills for context prompt inclusion
+  Future<void> selectAllSkills(List<String> skillIds) async {
+    try {
+      await updateCurrentConfig(selectedSkillIds: skillIds);
+    } catch (e) {
+      debugPrint('Failed to select all skills: $e');
+    }
+  }
+
+  // Deselects all skills for context prompt inclusion
+  Future<void> deselectAllSkills() async {
+    try {
+      await updateCurrentConfig(selectedSkillIds: const []);
+    } catch (e) {
+      debugPrint('Failed to deselect all skills: $e');
+    }
+  }
+
+  // Appends a custom user-created skill to the active project configuration
+  Future<void> addCustomSkill(AgentSkill skill) async {
+    try {
+      final current = _ref.read(selectedConfigProvider);
+      if (current == null) return;
+      final updatedCustom = [...current.customSkills, skill];
+      final updatedSelected = [...current.selectedSkillIds, skill.id];
+      await updateCurrentConfig(
+        customSkills: updatedCustom,
+        selectedSkillIds: updatedSelected,
+      );
+    } catch (e) {
+      debugPrint('Failed to add custom skill: $e');
+    }
+  }
+
+  // Removes a custom user-created skill from the active project configuration
+  Future<void> deleteCustomSkill(String skillId) async {
+    try {
+      final current = _ref.read(selectedConfigProvider);
+      if (current == null) return;
+      final updatedCustom = current.customSkills
+          .where((s) => s.id != skillId)
+          .toList();
+      final updatedSelected = current.selectedSkillIds
+          .where((id) => id != skillId)
+          .toList();
+      await updateCurrentConfig(
+        customSkills: updatedCustom,
+        selectedSkillIds: updatedSelected,
+      );
+    } catch (e) {
+      debugPrint('Failed to delete custom skill: $e');
     }
   }
 
@@ -414,6 +557,30 @@ class AppStateController {
       };
     } catch (e) {
       debugPrint('Failed to alter tree layout expansion status data: $e');
+    }
+  }
+
+  // Helper method persisting last selected project ID in window state file
+  Future<void> _saveLastSelectedProject(String projectId) async {
+    try {
+      final configService = _ref.read(configServiceProvider);
+      final currentState = await configService.loadWindowState() ?? {};
+      currentState['lastSelectedProjectId'] = projectId;
+      await configService.saveWindowState(currentState);
+    } catch (e) {
+      debugPrint('Failed to save last selected project ID: $e');
+    }
+  }
+
+  // Helper method persisting chosen project sort option
+  Future<void> _saveSortOption(ProjectSortOption sortOption) async {
+    try {
+      final configService = _ref.read(configServiceProvider);
+      final currentState = await configService.loadWindowState() ?? {};
+      currentState['projectSortOption'] = sortOption.name;
+      await configService.saveWindowState(currentState);
+    } catch (e) {
+      debugPrint('Failed to save project sort option: $e');
     }
   }
 
