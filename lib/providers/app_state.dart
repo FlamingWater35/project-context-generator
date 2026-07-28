@@ -299,12 +299,13 @@ final fileTreeProvider = FutureProvider<TreeNode?>((ref) async {
 });
 
 /// Computes prompt statistics in background isolate for live display in bottom status bar.
+/// Computes prompt statistics in background isolate for live display in bottom status bar.
 final promptStatsProvider = FutureProvider<PromptBuildResult?>((ref) async {
   final config = ref.watch(selectedConfigProvider);
   if (config == null || config.rootPath.isEmpty) return null;
 
   final selectedSkillIds = config.selectedSkillIds.toSet();
-  final allSkills = ref.watch(allProjectSkillsProvider);
+  final allSkills = ref.read(allProjectSkillsProvider);
   final selectedSkills = allSkills
       .where((s) => selectedSkillIds.contains(s.id))
       .toList();
