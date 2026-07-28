@@ -1,6 +1,6 @@
 # Project Context Generator
 
-A high-performance desktop application for generating structured, token-optimized context prompts from project repositories for Large Language Models (LLMs) and AI Agents.
+A high-performance desktop application for generating structured, token-optimized context prompts from project repositories for Large Language Models (LLMs) and AI Agents, and seamlessly applying AI-generated code changes back to your codebase.
 
 ---
 
@@ -36,6 +36,14 @@ A high-performance desktop application for generating structured, token-optimize
 - **"NEW" Visual Badges** – Highlights newly added files on disk since your last check or snapshot update.
 - **Conflict Resolution** – Prompts you to refresh your snapshot or copy the existing state when disk changes are detected during generation.
 
+### ⚡ Apply Code Changes from LLM Responses
+
+- **Automatic Clipboard Listener** – Background listener polls system clipboard and auto-detects when an LLM response containing file code blocks is copied.
+- **Smart Path & Code Block Parser** – Intelligently pairs file paths with their corresponding code blocks across multiple Markdown response formats (e.g., `### File: path/to/file`, ```dart:path/to/file, `--- File: path ---`).
+- **Strict Path Safety Enforcement** – Automatically validates target paths against canonical project roots to prevent path traversal security risks.
+- **Visual Change Preview** – Inspect detected code changes with line counts, file path previews, and distinct **MODIFIED** and **NEW** status badges.
+- **Safe Batch Writing** – Overwrite existing files or create missing subdirectories with graceful error boundary handling and live file tree refresh.
+
 ### 📊 Live Status Bar
 
 - **Real-time metrics displaying:**
@@ -66,7 +74,11 @@ A high-performance desktop application for generating structured, token-optimize
    - Check individual files or use folder actions (**Select All**, **Invert**) to include source files.
    - Click **Skills** to select auto-detected AI Agent instructions or define custom skills.
 5. **Check for Disk Changes** – Click **Check for Changes** to update snapshot tracking and mark newly added files with **NEW** badges.
-6. **Generate & Copy** – Click **Generate & Copy** (or press `Ctrl+G` / `Cmd+G`) to build the context prompt and copy it directly to your system clipboard.
+6. **Generate & Copy Prompt** – Click **Generate & Copy** (or press `Ctrl+G` / `Cmd+G`) to build the context prompt and copy it directly to your system clipboard.
+7. **Apply AI Code Changes** –
+   - Click **Apply Changes** in the top header.
+   - Leave clipboard listening enabled and copy an LLM response containing updated code blocks.
+   - Review detected **MODIFIED** or **NEW** files in the sidebar and click **Apply Changes** to write files directly to disk.
 
 ---
 
