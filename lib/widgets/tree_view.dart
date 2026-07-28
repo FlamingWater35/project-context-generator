@@ -204,6 +204,8 @@ class _ProjectTreeViewState extends ConsumerState<ProjectTreeView> {
                     child: SilkySingleChildScrollView(
                       controller: _horizontalController,
                       scrollDirection: Axis.horizontal,
+                      scrollSpeed: 1.4,
+                      silkyScrollDuration: const Duration(milliseconds: 1000),
                       child: AnimatedContainer(
                         duration: const Duration(milliseconds: 200),
                         curve: Curves.easeInOut,
@@ -216,6 +218,10 @@ class _ProjectTreeViewState extends ConsumerState<ProjectTreeView> {
                           thumbVisibility: true,
                           child: SilkySingleChildScrollView(
                             controller: _scrollController,
+                            scrollSpeed: 1.4,
+                            silkyScrollDuration: const Duration(
+                              milliseconds: 1000,
+                            ),
                             padding: const EdgeInsets.only(
                               left: 16.0,
                               right: 24.0,

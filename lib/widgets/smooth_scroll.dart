@@ -6,8 +6,8 @@ class SmoothScrollView extends StatelessWidget {
   const SmoothScrollView({
     super.key,
     required this.builder,
-    this.scrollSpeed = 2.2,
-    this.silkyScrollDuration = const Duration(milliseconds: 450),
+    this.scrollSpeed = 1.1,
+    this.silkyScrollDuration = const Duration(milliseconds: 1400),
     this.animationCurve = Curves.easeOutQuad,
   });
 
