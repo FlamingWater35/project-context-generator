@@ -173,7 +173,10 @@ class FsService {
     List<String> ignorePatterns,
   ) async {
     try {
-      return await Isolate.run(() => _scanPathsSync(rootPath, ignorePatterns));
+      return await Isolate.run(() {
+        final tree = _buildTreeSync(rootPath, ignorePatterns, null);
+        return tree?.getAllRelativePaths() ?? <String>{};
+      });
     } catch (e) {
       debugPrint('Background Isolate path execution failed: $e');
       return const <String>{};
@@ -387,65 +390,6 @@ class FsService {
         );
       }
     }
-  }
-
-  /// Synchronous traversal analyzer logic designed for Isolate targets.
-  static Set<String> _scanPathsSync(
-    String rootPath,
-    List<String> ignorePatterns,
-  ) {
-    final rules = ignorePatterns
-        .map((pattern) => _IgnoreRule(pattern))
-        .toList();
-    final Set<String> paths = {};
-    final dir = Directory(rootPath);
-    if (!dir.existsSync()) return paths;
-
-    final canonicalRoot = _getCanonicalRootPath(rootPath);
-    final canonicalDir = Directory(canonicalRoot);
-
-    void traverse(Directory currentDir) {
-      try {
-        final entities = currentDir.listSync(followLinks: false);
-        for (final entity in entities) {
-          try {
-            final normalizedEntityPath = _normalizeDriveLetter(entity.path);
-            final relPath = p
-                .relative(normalizedEntityPath, from: canonicalRoot)
-                .replaceAll('\\', '/');
-            final isDir = entity is Directory;
-
-            bool skip = false;
-            for (final rule in rules) {
-              if (isDir) {
-                if (rule.matchesDir(relPath) ||
-                    rule.matches(relPath, '$relPath/')) {
-                  skip = true;
-                  break;
-                }
-              } else {
-                if (rule.matches(relPath, relPath)) {
-                  skip = true;
-                  break;
-                }
-              }
-            }
-
-            if (!skip) {
-              paths.add(relPath);
-              if (entity is Directory) {
-                traverse(entity);
-              }
-            }
-          } catch (_) {
-            continue;
-          }
-        }
-      } catch (_) {}
-    }
-
-    traverse(canonicalDir);
-    return paths;
   }
 
   /// Synchronous directory assembler logic designed for background Isolate runners.

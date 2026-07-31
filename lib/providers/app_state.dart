@@ -280,6 +280,12 @@ final fileTreeProvider = FutureProvider<TreeNode?>((ref) async {
       final configService = ref.read(configServiceProvider);
       knownPaths = await configService.loadSnapshot(treeConfig.configId);
       if (!mounted) return null;
+
+      // Ensure in-memory state is populated when snapshot is loaded from disk
+      if (knownPaths != null) {
+        final notifier = ref.read(projectSnapshotsProvider.notifier);
+        notifier.state = {...notifier.state, treeConfig.configId: knownPaths};
+      }
     }
 
     final fsService = ref.read(fsServiceProvider);
