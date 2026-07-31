@@ -147,25 +147,30 @@ class CodeParserService {
     return null;
   }
 
-  /// Extracts the most recent valid file path from text preceding a code block.
+  /// Extracts the most recent valid file path from text preceding a code block cleanly without regex warnings or capturing preceding sentences.
   static String? _extractPathFromText(String text, String rootPath) {
     if (text.trim().isEmpty) return null;
 
-    // Matches path-like strings with extensions or known file patterns, including paths with spaces
-    final pathRegex = RegExp(
-      r'(?:###|##|#|\*\*|---)?\s*(?:File:\s*)?`?([a-zA-Z0-9_\-\/\.\+\s]+?\.[a-zA-Z0-9]+|[a-zA-Z0-9_\-\/\.\+]+)`?',
+    // 1. First try backticked or quoted path strings (allows spaces inside quotes)
+    final quotedRegex = RegExp(
+      r'''[`"']([-a-zA-Z0-9_./+\s]+?\.[a-zA-Z0-9]+|[-a-zA-Z0-9_./+\s]+)[`"']''',
       caseSensitive: false,
     );
+    final quotedMatches = quotedRegex.allMatches(text).toList();
+    for (final m in quotedMatches.reversed) {
+      final cleaned = _cleanPathString(m.group(1) ?? '', rootPath);
+      if (cleaned != null) return cleaned;
+    }
 
-    final matches = pathRegex.allMatches(text).toList();
-
-    // Iterate backwards to find the closest path reference right before the code block
-    for (final m in matches.reversed) {
-      final rawCandidate = m.group(1) ?? '';
-      final cleaned = _cleanPathString(rawCandidate, rootPath);
-      if (cleaned != null) {
-        return cleaned;
-      }
+    // 2. Fall back to unquoted path candidates (disallows unescaped spaces to prevent capturing sentence prefixes)
+    final unquotedRegex = RegExp(
+      r'(?:###|##|#|\*\*|---)?\s*(?:File:\s*)?([-a-zA-Z0-9_./+]+\.[a-zA-Z0-9]+|[-a-zA-Z0-9_./+]+)',
+      caseSensitive: false,
+    );
+    final unquotedMatches = unquotedRegex.allMatches(text).toList();
+    for (final m in unquotedMatches.reversed) {
+      final cleaned = _cleanPathString(m.group(1) ?? '', rootPath);
+      if (cleaned != null) return cleaned;
     }
 
     return null;
@@ -173,12 +178,8 @@ class CodeParserService {
 
   /// Cleans and validates candidate path strings safely without corrupting paths containing spaces.
   static String? _cleanPathString(String raw, String rootPath) {
-    // Strip surrounding quotes, backticks, colons, brackets, and whitespace using triple-quoted raw string
     var cleaned = raw.trim();
-    cleaned = cleaned.replaceAll(
-      RegExp(r'''^[`"'\s\(\):]+|[`"'\s\(\):]+$'''),
-      '',
-    );
+    cleaned = cleaned.replaceAll(RegExp(r'''^[`"'\s():]+|[`"'\s():]+$'''), '');
     if (cleaned.isEmpty) return null;
 
     // Standardize slashes

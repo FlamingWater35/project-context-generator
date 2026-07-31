@@ -176,7 +176,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
       child: LayoutBuilder(
         builder: (context, headerConstraints) {
-          final isNarrow = headerConstraints.maxWidth < 600;
+          final isNarrow = headerConstraints.maxWidth < 880;
           final skillCount = config.selectedSkillIds.length;
 
           return Padding(

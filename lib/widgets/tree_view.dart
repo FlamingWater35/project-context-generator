@@ -226,9 +226,32 @@ class _ProjectTreeViewState extends ConsumerState<ProjectTreeView> {
         ),
         error: (err, stack) => Center(
           key: const ValueKey('file_tree_error'),
-          child: Text(
-            'Error building directory tree: $err',
-            style: const TextStyle(color: Colors.redAccent),
+          child: Padding(
+            padding: const EdgeInsets.all(24.0),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Icon(
+                  Icons.error_outline,
+                  size: 48,
+                  color: Colors.redAccent,
+                ),
+                const SizedBox(height: 12),
+                Text(
+                  'Failed to load directory tree: $err',
+                  style: const TextStyle(color: Colors.redAccent),
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: 16),
+                ElevatedButton.icon(
+                  icon: const Icon(Icons.refresh),
+                  label: const Text('Retry Scan'),
+                  onPressed: () {
+                    ref.invalidate(fileTreeProvider);
+                  },
+                ),
+              ],
+            ),
           ),
         ),
       ),

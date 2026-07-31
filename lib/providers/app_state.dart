@@ -14,6 +14,14 @@ import '../services/fs_service.dart';
 /// Available sorting modes for organizing project configurations in the sidebar.
 enum ProjectSortOption { nameAsc, nameDesc, dateNewest, dateOldest }
 
+/// Helper escaping glob syntax special characters to prevent invalid pattern matching.
+String _escapeGlobPath(String path) {
+  return path.replaceAllMapped(
+    RegExp(r'([\[\]\{\}\*\?\!\(\)])'),
+    (match) => '\\${match[0]}',
+  );
+}
+
 /// Provider pointing to the configuration database service helper.
 final configServiceProvider = Provider((ref) => ConfigService());
 
@@ -185,7 +193,13 @@ final selectedConfigProvider = Provider<ProjectConfig?>((ref) {
   if (configs.isEmpty) return null;
 
   final config = configs.where((c) => c.id == selectedId).firstOrNull;
-  return config ?? configs.first;
+  if (config != null) return config;
+
+  final fallback = configs.first;
+  Future.microtask(() {
+    ref.read(selectedConfigIdProvider.notifier).state = fallback.id;
+  });
+  return fallback;
 });
 
 /// Asynchronously scans project root to discover agent skills in the codebase.
@@ -281,10 +295,17 @@ final fileTreeProvider = FutureProvider<TreeNode?>((ref) async {
       knownPaths = await configService.loadSnapshot(treeConfig.configId);
       if (!mounted) return null;
 
-      // Ensure in-memory state is populated when snapshot is loaded from disk
+      // Ensure in-memory state is populated when snapshot is loaded from disk via microtask deferral
       if (knownPaths != null) {
-        final notifier = ref.read(projectSnapshotsProvider.notifier);
-        notifier.state = {...notifier.state, treeConfig.configId: knownPaths};
+        Future.microtask(() {
+          if (mounted) {
+            final notifier = ref.read(projectSnapshotsProvider.notifier);
+            notifier.state = {
+              ...notifier.state,
+              treeConfig.configId: knownPaths!,
+            };
+          }
+        });
       }
     }
 
@@ -371,7 +392,6 @@ class AppStateController {
   List<String> _expandPathsToFiles(Iterable<String> paths) {
     final treeNode = _ref.read(fileTreeProvider).value;
     if (treeNode == null) {
-      // Return empty list if tree is not yet loaded to avoid persisting unexpanded directory paths
       return const [];
     }
 
@@ -653,7 +673,7 @@ class AppStateController {
     }
   }
 
-  /// Appends multiple ignore rules using fast path lookup and resets multi-select highlights.
+  /// Appends multiple ignore rules using fast path lookup with glob escaping and resets multi-select highlights.
   Future<void> addIgnorePatterns(List<String> paths) async {
     try {
       final current = _ref.read(selectedConfigProvider);
@@ -669,11 +689,14 @@ class AppStateController {
       for (final p in paths) {
         final match = pathMap[p];
         final bool isDir = match?.isDirectory ?? false;
+        final escaped = _escapeGlobPath(p);
 
         if (isDir) {
-          formattedPatterns.add(p.endsWith('/**') ? p : '$p/**');
+          formattedPatterns.add(
+            escaped.endsWith('/**') ? escaped : '$escaped/**',
+          );
         } else {
-          formattedPatterns.add(p);
+          formattedPatterns.add(escaped);
         }
       }
 

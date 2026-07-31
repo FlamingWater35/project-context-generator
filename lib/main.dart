@@ -111,76 +111,78 @@ class _ProjectContextGeneratorAppState
   @override
   void onWindowClose() async {
     try {
-      await windowManager.hide();
-    } catch (e) {
-      debugPrint('Failed to hide window frame during exit: $e');
-    }
-
-    try {
-      // Await pending configuration flushes to ensure full disk persistence before exit
-      await ref.read(configsProvider.notifier).flush();
-    } catch (e) {
-      debugPrint('Failed to save pending configurations before exit: $e');
-    }
-
-    try {
-      final metrics = await Future.wait([
-        windowManager.isMaximized(),
-        windowManager.isFullScreen(),
-        windowManager.getSize(),
-        windowManager.getPosition(),
-      ]);
-
-      final isMaximized = metrics[0] as bool;
-      final isFullScreen = metrics[1] as bool;
-      final size = metrics[2] as Size;
-      final pos = metrics[3] as Offset;
-
-      double? width;
-      double? height;
-      double? x;
-      double? y;
-
-      if (!isMaximized && !isFullScreen) {
-        width = size.width;
-        height = size.height;
-        x = pos.dx;
-        y = pos.dy;
-      } else {
-        final configService = ref.read(configServiceProvider);
-        final prevState = await configService.loadWindowState();
-        if (prevState != null) {
-          width = prevState['width'] as double?;
-          height = prevState['height'] as double?;
-          x = prevState['x'] as double?;
-          y = prevState['y'] as double?;
-        }
+      try {
+        await windowManager.hide();
+      } catch (e) {
+        debugPrint('Failed to hide window frame during exit: $e');
       }
 
-      final sidebarWidth = ref.read(sidebarWidthProvider);
-      final selectedConfigId = ref.read(selectedConfigIdProvider);
-      final sortOption = ref.read(projectSortOptionProvider);
-      final configService = ref.read(configServiceProvider);
+      try {
+        // Await pending configuration flushes to ensure full disk persistence before exit
+        await ref.read(configsProvider.notifier).flush();
+      } catch (e) {
+        debugPrint('Failed to save pending configurations before exit: $e');
+      }
 
-      await configService.saveWindowState({
-        'width': width,
-        'height': height,
-        'x': x,
-        'y': y,
-        'isMaximized': isMaximized,
-        'isFullScreen': isFullScreen,
-        'sidebarWidth': sidebarWidth,
-        'lastSelectedProjectId': selectedConfigId,
-        'projectSortOption': sortOption.name,
-      });
-    } catch (e) {
-      debugPrint('Failed to serialize and save window configurations: $e');
-    }
+      try {
+        final metrics = await Future.wait([
+          windowManager.isMaximized(),
+          windowManager.isFullScreen(),
+          windowManager.getSize(),
+          windowManager.getPosition(),
+        ]);
 
-    try {
-      await windowManager.destroy();
-    } catch (e) {
-      debugPrint('Failed to safely destroy native window context: $e');
+        final isMaximized = metrics[0] as bool;
+        final isFullScreen = metrics[1] as bool;
+        final size = metrics[2] as Size;
+        final pos = metrics[3] as Offset;
+
+        double? width;
+        double? height;
+        double? x;
+        double? y;
+
+        if (!isMaximized && !isFullScreen) {
+          width = size.width;
+          height = size.height;
+          x = pos.dx;
+          y = pos.dy;
+        } else {
+          final configService = ref.read(configServiceProvider);
+          final prevState = await configService.loadWindowState();
+          if (prevState != null) {
+            width = prevState['width'] as double?;
+            height = prevState['height'] as double?;
+            x = prevState['x'] as double?;
+            y = prevState['y'] as double?;
+          }
+        }
+
+        final sidebarWidth = ref.read(sidebarWidthProvider);
+        final selectedConfigId = ref.read(selectedConfigIdProvider);
+        final sortOption = ref.read(projectSortOptionProvider);
+        final configService = ref.read(configServiceProvider);
+
+        await configService.saveWindowState({
+          'width': width,
+          'height': height,
+          'x': x,
+          'y': y,
+          'isMaximized': isMaximized,
+          'isFullScreen': isFullScreen,
+          'sidebarWidth': sidebarWidth,
+          'lastSelectedProjectId': selectedConfigId,
+          'projectSortOption': sortOption.name,
+        });
+      } catch (e) {
+        debugPrint('Failed to serialize and save window configurations: $e');
+      }
+    } finally {
+      try {
+        await windowManager.destroy();
+      } catch (e) {
+        debugPrint('Failed to safely destroy native window context: $e');
+      }
     }
   }
 

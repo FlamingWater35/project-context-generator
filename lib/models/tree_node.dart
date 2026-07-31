@@ -53,18 +53,27 @@ class TreeNode {
     );
   }
 
-  /// Recursively flattens the visible tree nodes into a 1D list for virtualized ListView rendering.
+  /// Recursively flattens the visible tree nodes into a 1D list for virtualized ListView rendering using a single accumulator.
   List<FlatTreeItem> flattenVisibleTree(
     Map<String, bool> expansionState, {
     int depth = 0,
   }) {
     final List<FlatTreeItem> result = [];
+    _flattenTreeRecursive(this, expansionState, depth, result);
+    return result;
+  }
 
-    for (final child in children) {
+  static void _flattenTreeRecursive(
+    TreeNode node,
+    Map<String, bool> expansionState,
+    int depth,
+    List<FlatTreeItem> accumulator,
+  ) {
+    for (final child in node.children) {
       final isExpanded = expansionState[child.relativePath] ?? false;
       final hasChildren = child.isDirectory && child.children.isNotEmpty;
 
-      result.add(
+      accumulator.add(
         FlatTreeItem(
           node: child,
           depth: depth,
@@ -74,13 +83,9 @@ class TreeNode {
       );
 
       if (child.isDirectory && isExpanded) {
-        result.addAll(
-          child.flattenVisibleTree(expansionState, depth: depth + 1),
-        );
+        _flattenTreeRecursive(child, expansionState, depth + 1, accumulator);
       }
     }
-
-    return result;
   }
 
   /// Populates a lookup map of relativePath to TreeNode for O(1) path access.
