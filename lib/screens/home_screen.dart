@@ -128,15 +128,18 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     }
   }
 
-  /// Recovers altered local parameters, verifying disk updates directly.
+  /// Synchronizes snapshot tracking baseline with current disk files and refreshes directory layout.
   Future<void> _handleCheckChanges(BuildContext context, WidgetRef ref) async {
-    ref.invalidate(fileTreeProvider);
     try {
+      // Synchronize in-memory snapshot and persist disk updates to prevent redundant state change dialogs
+      await ref.read(appStateControllerProvider).acknowledgeChanges();
+      ref.invalidate(fileTreeProvider);
       await ref.read(fileTreeProvider.future);
+
       if (context.mounted) {
         showInfoSnackBar(
           context,
-          'Directory structure updated (new files marked)',
+          'Project structure updated and snapshot synchronized.',
         );
       }
     } catch (e) {
