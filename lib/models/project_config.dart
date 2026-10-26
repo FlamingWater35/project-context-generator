@@ -59,10 +59,16 @@ class ProjectConfig {
         createdAt: parsedCreatedAt,
       );
     } catch (e) {
-      // Fallback parsing protects application startup from corrupted configuration files
+      // Fallback parsing protects application startup from corrupted configuration
+      // files. Read raw values defensively because the original values may have
+      // failed type casts in the first place.
+      final Object? rawId = json['id'];
+      final Object? rawName = json['name'];
       return ProjectConfig(
-        id: json['id'] as String? ?? 'corrupted_fallback',
-        name: json['name'] as String? ?? 'Unreadable Config',
+        id: rawId is String && rawId.isNotEmpty ? rawId : 'corrupted_fallback',
+        name: rawName is String && rawName.isNotEmpty
+            ? rawName
+            : 'Unreadable Config',
         rootPath: '',
         includedFiles: const <String>[],
         ignorePatterns: const ['.git/**', 'node_modules/**', 'build/**'],

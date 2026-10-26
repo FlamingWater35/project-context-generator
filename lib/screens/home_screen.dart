@@ -179,7 +179,9 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
       child: LayoutBuilder(
         builder: (context, headerConstraints) {
-          final isNarrow = headerConstraints.maxWidth < 880;
+          // The horizontal action row needs roughly 880 px of *content* width;
+          // use the stacked layout below that so controls never overflow.
+          final isNarrow = headerConstraints.maxWidth < 940;
           final skillCount = config.selectedSkillIds.length;
 
           return Padding(

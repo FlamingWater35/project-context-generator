@@ -154,9 +154,15 @@ class ConfigsNotifier extends StateNotifier<List<ProjectConfig>> {
   /// Asynchronously loads all previously stored project configs and restores the last opened project.
   Future<void> _load() async {
     try {
-      state = await _configService.loadConfigs();
+      final loadedConfigs = await _configService.loadConfigs();
+      // The container may be disposed while asynchronous disk reads are in
+      // flight (e.g. the window closes immediately after startup).
+      if (!mounted) return;
+      state = loadedConfigs;
 
       final windowState = await _configService.loadWindowState();
+      if (!mounted) return;
+
       if (windowState != null) {
         final lastId = windowState['lastSelectedProjectId'] as String?;
         if (lastId != null && state.any((c) => c.id == lastId)) {
@@ -178,7 +184,7 @@ class ConfigsNotifier extends StateNotifier<List<ProjectConfig>> {
       }
     } catch (e) {
       debugPrint('Failed loading saved configuration parameters: $e');
-      state = const [];
+      if (mounted) state = const [];
     }
   }
 }
@@ -358,7 +364,9 @@ final promptStatsProvider = FutureProvider<PromptBuildResult?>((ref) async {
   if (isCancelled) return null;
 
   final selectedSkillIds = config.selectedSkillIds.toSet();
-  final allSkills = ref.read(allProjectSkillsProvider);
+  // Watch (not read) so skill detection completing later refreshes the
+  // statistics instead of leaving the status bar stale.
+  final allSkills = ref.watch(allProjectSkillsProvider);
   final selectedSkills = allSkills
       .where((s) => selectedSkillIds.contains(s.id))
       .toList();

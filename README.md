@@ -65,6 +65,26 @@ A high-performance desktop application for generating structured, token-optimize
 
 ---
 
+## Testing
+
+The test suite covers the data models, filesystem and change parsers, configuration persistence, Riverpod state, and every major screen/dialog widget.
+
+```bash
+# Run the full suite
+flutter test
+
+# Generate an LCOV coverage report (coverage/lcov.info)
+flutter test --coverage
+
+# Static analysis and formatting checks
+flutter analyze
+dart format --output=none --set-exit-if-changed lib test
+```
+
+Widget tests use an in-memory `ConfigService` and a fake `FsService` so they run hermetically without touching the real application-support directory.
+
+---
+
 ## Usage Guide
 
 1. **Create a Project Configuration** – Click the `+` icon in the sidebar to create a new profile.

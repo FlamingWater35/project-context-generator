@@ -220,12 +220,21 @@ class _ApplyChangesDialogState extends ConsumerState<ApplyChangesDialog> {
     final selectedCount = _detectedChanges.where((c) => c.isSelected).length;
 
     return AlertDialog(
-      title: Row(
+      // Wrap the header actions so the dialog remains usable on smaller
+      // screens instead of overflowing horizontally.
+      title: Wrap(
+        crossAxisAlignment: WrapCrossAlignment.center,
+        spacing: 12,
+        runSpacing: 8,
         children: [
-          const Icon(Icons.build_circle_outlined, size: 26),
-          const SizedBox(width: 12),
-          const Text('Apply Code Changes'),
-          const Spacer(),
+          const Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(Icons.build_circle_outlined, size: 26),
+              SizedBox(width: 12),
+              Text('Apply Code Changes'),
+            ],
+          ),
           if (_isListening)
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
@@ -253,13 +262,11 @@ class _ApplyChangesDialogState extends ConsumerState<ApplyChangesDialog> {
                 ],
               ),
             ),
-          const SizedBox(width: 12),
           OutlinedButton.icon(
             icon: Icon(_isListening ? Icons.pause : Icons.radar, size: 18),
             label: Text(_isListening ? 'Stop Listening' : 'Start Listening'),
             onPressed: _isListening ? _stopListening : _startListening,
           ),
-          const SizedBox(width: 8),
           ElevatedButton.icon(
             icon: const Icon(Icons.content_paste, size: 18),
             label: const Text('Paste Manual'),
@@ -313,11 +320,13 @@ class _ApplyChangesDialogState extends ConsumerState<ApplyChangesDialog> {
                       children: [
                         Row(
                           children: [
-                            Text(
-                              'Changed Files (${_detectedChanges.length})',
-                              style: Theme.of(context).textTheme.titleSmall,
+                            Expanded(
+                              child: Text(
+                                'Changed Files (${_detectedChanges.length})',
+                                style: Theme.of(context).textTheme.titleSmall,
+                                overflow: TextOverflow.ellipsis,
+                              ),
                             ),
-                            const Spacer(),
                             TextButton(
                               onPressed: () {
                                 setState(() {

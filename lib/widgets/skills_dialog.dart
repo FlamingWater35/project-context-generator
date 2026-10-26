@@ -53,88 +53,23 @@ class _SkillsDialogState extends ConsumerState<SkillsDialog> {
     );
   }
 
-  /// Opens an interactive creation dialog for adding custom user skills
-  void _showAddCustomSkillDialog(BuildContext context, WidgetRef ref) {
-    final nameController = TextEditingController();
-    final descController = TextEditingController();
-    final contentController = TextEditingController();
-
-    showDialog(
+  /// Opens an interactive creation dialog for adding custom user skills.
+  Future<void> _showAddCustomSkillDialog(
+    BuildContext context,
+    WidgetRef ref,
+  ) async {
+    final skill = await showDialog<AgentSkill>(
       context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('New Custom Skill'),
-        content: SizedBox(
-          width: 500,
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              TextField(
-                controller: nameController,
-                decoration: const InputDecoration(
-                  labelText: 'Skill Name',
-                  hintText: 'e.g. Code Reviewer',
-                  border: OutlineInputBorder(),
-                ),
-                autofocus: true,
-              ),
-              const SizedBox(height: 12),
-              TextField(
-                controller: descController,
-                decoration: const InputDecoration(
-                  labelText: 'Description',
-                  hintText: 'e.g. Guidance on PR reviews and code quality',
-                  border: OutlineInputBorder(),
-                ),
-              ),
-              const SizedBox(height: 12),
-              TextField(
-                controller: contentController,
-                maxLines: 6,
-                decoration: const InputDecoration(
-                  labelText: 'Skill Instructions / Content',
-                  hintText: 'Enter instructions for the AI agent...',
-                  border: OutlineInputBorder(),
-                ),
-              ),
-            ],
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Cancel'),
-          ),
-          FilledButton(
-            onPressed: () async {
-              final name = nameController.text.trim();
-              final desc = descController.text.trim();
-              final content = contentController.text.trim();
+      builder: (_) => const _CustomSkillDialog(),
+    );
 
-              if (name.isNotEmpty) {
-                final skill = AgentSkill(
-                  id: 'custom_${const Uuid().v4()}',
-                  name: name,
-                  description: desc.isEmpty
-                      ? 'Custom user-defined skill'
-                      : desc,
-                  content: content,
-                  isCustom: true,
-                );
-                await ref
-                    .read(appStateControllerProvider)
-                    .addCustomSkill(skill);
-              }
-              if (context.mounted) Navigator.pop(context);
-            },
-            child: const Text('Add Skill'),
-          ),
-        ],
-      ),
-    ).then((_) {
-      nameController.dispose();
-      descController.dispose();
-      contentController.dispose();
-    });
+    if (skill == null) return;
+
+    try {
+      await ref.read(appStateControllerProvider).addCustomSkill(skill);
+    } catch (e) {
+      debugPrint('Failed to add custom skill: $e');
+    }
   }
 
   @override
@@ -381,6 +316,102 @@ class _SkillsDialogState extends ConsumerState<SkillsDialog> {
           onPressed: () => Navigator.pop(context),
           child: const Text('Done'),
         ),
+      ],
+    );
+  }
+}
+
+/// Modal dialog creating a custom [AgentSkill].
+///
+/// The controllers live in this stateful widget so they are disposed together
+/// with the route instead of racing the dialog's exit animation.
+class _CustomSkillDialog extends StatefulWidget {
+  const _CustomSkillDialog();
+
+  @override
+  State<_CustomSkillDialog> createState() => _CustomSkillDialogState();
+}
+
+class _CustomSkillDialogState extends State<_CustomSkillDialog> {
+  final TextEditingController _nameController = TextEditingController();
+  final TextEditingController _descriptionController = TextEditingController();
+  final TextEditingController _contentController = TextEditingController();
+
+  @override
+  void dispose() {
+    _nameController.dispose();
+    _descriptionController.dispose();
+    _contentController.dispose();
+    super.dispose();
+  }
+
+  void _submit() {
+    final name = _nameController.text.trim();
+    if (name.isEmpty) return;
+
+    final description = _descriptionController.text.trim();
+    final content = _contentController.text.trim();
+
+    Navigator.pop(
+      context,
+      AgentSkill(
+        id: 'custom_${const Uuid().v4()}',
+        name: name,
+        description: description.isEmpty
+            ? 'Custom user-defined skill'
+            : description,
+        content: content,
+        isCustom: true,
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text('New Custom Skill'),
+      content: SizedBox(
+        width: 500,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextField(
+              controller: _nameController,
+              decoration: const InputDecoration(
+                labelText: 'Skill Name',
+                hintText: 'e.g. Code Reviewer',
+                border: OutlineInputBorder(),
+              ),
+              autofocus: true,
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: _descriptionController,
+              decoration: const InputDecoration(
+                labelText: 'Description',
+                hintText: 'e.g. Guidance on PR reviews and code quality',
+                border: OutlineInputBorder(),
+              ),
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: _contentController,
+              maxLines: 6,
+              decoration: const InputDecoration(
+                labelText: 'Skill Instructions / Content',
+                hintText: 'Enter instructions for the AI agent...',
+                border: OutlineInputBorder(),
+              ),
+            ),
+          ],
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: const Text('Cancel'),
+        ),
+        FilledButton(onPressed: _submit, child: const Text('Add Skill')),
       ],
     );
   }

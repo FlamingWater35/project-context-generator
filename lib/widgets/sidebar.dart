@@ -26,88 +26,48 @@ class _SidebarState extends ConsumerState<Sidebar> {
   }
 
   /// Opens a pop-up dialog to capture names for new configuration files.
-  void _showCreateDialog(BuildContext context, WidgetRef ref) {
-    final controller = TextEditingController();
-    showDialog(
+  Future<void> _showCreateDialog(BuildContext context, WidgetRef ref) async {
+    final name = await showDialog<String>(
       context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('New Project'),
-        content: TextField(
-          controller: controller,
-          decoration: const InputDecoration(labelText: 'Project Name'),
-          autofocus: true,
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Cancel'),
-          ),
-          FilledButton(
-            onPressed: () async {
-              final trimmedText = controller.text.trim();
-              if (trimmedText.isNotEmpty) {
-                try {
-                  await ref
-                      .read(configsProvider.notifier)
-                      .addConfig(trimmedText);
-                } catch (e) {
-                  debugPrint('Could not create new project config: $e');
-                }
-              }
-              if (context.mounted) Navigator.pop(context);
-            },
-            child: const Text('Create'),
-          ),
-        ],
+      builder: (_) => const _ProjectNameDialog(
+        title: 'New Project',
+        confirmLabel: 'Create',
       ),
-    ).then((_) => controller.dispose());
+    );
+
+    if (name == null || name.isEmpty) return;
+
+    try {
+      await ref.read(configsProvider.notifier).addConfig(name);
+    } catch (e) {
+      debugPrint('Could not create new project config: $e');
+    }
   }
 
   /// Launches target input dialogs enabling name overrides of configurations.
-  void _showRenameDialog(
+  Future<void> _showRenameDialog(
     BuildContext context,
     WidgetRef ref,
     ProjectConfig config,
-  ) {
-    final controller = TextEditingController(text: config.name);
-    showDialog(
+  ) async {
+    final name = await showDialog<String>(
       context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Rename Project'),
-        content: TextField(
-          controller: controller,
-          decoration: const InputDecoration(labelText: 'Project Name'),
-          autofocus: true,
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Cancel'),
-          ),
-          FilledButton(
-            onPressed: () {
-              final trimmedText = controller.text.trim();
-              if (trimmedText.isNotEmpty) {
-                try {
-                  ref
-                      .read(configsProvider.notifier)
-                      .updateConfig(
-                        config.copyWith(name: trimmedText),
-                        oldName: config.name,
-                      );
-                } catch (e) {
-                  debugPrint(
-                    'Could not apply target layout rename operations: $e',
-                  );
-                }
-              }
-              Navigator.pop(context);
-            },
-            child: const Text('Rename'),
-          ),
-        ],
+      builder: (_) => _ProjectNameDialog(
+        title: 'Rename Project',
+        confirmLabel: 'Rename',
+        initialValue: config.name,
       ),
-    ).then((_) => controller.dispose());
+    );
+
+    if (name == null || name.isEmpty || name == config.name) return;
+
+    try {
+      ref
+          .read(configsProvider.notifier)
+          .updateConfig(config.copyWith(name: name), oldName: config.name);
+    } catch (e) {
+      debugPrint('Could not apply target layout rename operations: $e');
+    }
   }
 
   /// Requests deletion verification before wiping files.
@@ -186,11 +146,16 @@ class _SidebarState extends ConsumerState<Sidebar> {
               padding: const EdgeInsets.all(16.0),
               child: Row(
                 children: [
-                  const Text(
-                    'Projects',
-                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                  const Expanded(
+                    child: Text(
+                      'Projects',
+                      style: TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                      ),
+                      overflow: TextOverflow.ellipsis,
+                    ),
                   ),
-                  const Spacer(),
                   PopupMenuButton<ProjectSortOption>(
                     icon: const Icon(Icons.sort, size: 20),
                     tooltip: 'Sort Projects',
@@ -206,7 +171,12 @@ class _SidebarState extends ConsumerState<Sidebar> {
                           children: [
                             Icon(Icons.sort_by_alpha, size: 18),
                             SizedBox(width: 8),
-                            Text('Name (A to Z)'),
+                            Flexible(
+                              child: Text(
+                                'Name (A to Z)',
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
                           ],
                         ),
                       ),
@@ -216,7 +186,12 @@ class _SidebarState extends ConsumerState<Sidebar> {
                           children: [
                             Icon(Icons.sort_by_alpha, size: 18),
                             SizedBox(width: 8),
-                            Text('Name (Z to A)'),
+                            Flexible(
+                              child: Text(
+                                'Name (Z to A)',
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
                           ],
                         ),
                       ),
@@ -226,7 +201,12 @@ class _SidebarState extends ConsumerState<Sidebar> {
                           children: [
                             Icon(Icons.calendar_today, size: 18),
                             SizedBox(width: 8),
-                            Text('Date (Newest First)'),
+                            Flexible(
+                              child: Text(
+                                'Date (Newest First)',
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
                           ],
                         ),
                       ),
@@ -236,7 +216,12 @@ class _SidebarState extends ConsumerState<Sidebar> {
                           children: [
                             Icon(Icons.calendar_today, size: 18),
                             SizedBox(width: 8),
-                            Text('Date (Oldest First)'),
+                            Flexible(
+                              child: Text(
+                                'Date (Oldest First)',
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
                           ],
                         ),
                       ),
@@ -380,6 +365,63 @@ class _SidebarState extends ConsumerState<Sidebar> {
           ],
         ),
       ),
+    );
+  }
+}
+
+/// Modal dialog capturing a project name.
+///
+/// A dedicated stateful widget owns the [TextEditingController] so it is
+/// disposed only after the route (and its closing animation) is gone. Disposing
+/// from `showDialog(...).then(...)` can race with the exit transition and throw
+/// "A TextEditingController was used after being disposed".
+class _ProjectNameDialog extends StatefulWidget {
+  const _ProjectNameDialog({
+    required this.title,
+    required this.confirmLabel,
+    this.initialValue = '',
+  });
+
+  final String confirmLabel;
+  final String initialValue;
+  final String title;
+
+  @override
+  State<_ProjectNameDialog> createState() => _ProjectNameDialogState();
+}
+
+class _ProjectNameDialogState extends State<_ProjectNameDialog> {
+  late final TextEditingController _controller = TextEditingController(
+    text: widget.initialValue,
+  );
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  void _submit() {
+    Navigator.pop(context, _controller.text.trim());
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: Text(widget.title),
+      content: TextField(
+        controller: _controller,
+        decoration: const InputDecoration(labelText: 'Project Name'),
+        autofocus: true,
+        onSubmitted: (_) => _submit(),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: const Text('Cancel'),
+        ),
+        FilledButton(onPressed: _submit, child: Text(widget.confirmLabel)),
+      ],
     );
   }
 }

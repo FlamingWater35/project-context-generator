@@ -64,7 +64,7 @@ class _IgnoreRule {
   factory _IgnoreRule(String pattern) {
     String pStr = pattern.trim();
     if (pStr.isEmpty || pStr.startsWith('#')) {
-      return const _IgnoreRule._(null, null, null, null);
+      return const _IgnoreRule._(null, null, null, null, null);
     }
 
     bool onlyDirs = false;
@@ -80,6 +80,13 @@ class _IgnoreRule {
       basePattern = basePattern.substring(0, basePattern.length - 2);
     }
 
+    // A leading `**/` means "at any depth, including the project root".
+    // package:glob's `**/` does not match zero segments, so strip it and let
+    // the root/nested glob pair below cover both cases.
+    while (basePattern.startsWith('**/')) {
+      basePattern = basePattern.substring(3);
+    }
+
     bool isRootAnchored = false;
     if (basePattern.startsWith('/')) {
       isRootAnchored = true;
@@ -87,12 +94,13 @@ class _IgnoreRule {
     }
 
     if (basePattern.isEmpty) {
-      return const _IgnoreRule._(null, null, null, null);
+      return const _IgnoreRule._(null, null, null, null, null);
     }
 
     final bool hasInternalSlash = basePattern.contains('/');
 
     Glob? rootGlob;
+    Glob? rootDirGlob;
     Glob? nestedGlob;
     Glob? dirGlob;
     Glob? pruneGlob;
@@ -102,6 +110,10 @@ class _IgnoreRule {
         if (!onlyDirs) {
           rootGlob = Glob(basePattern, context: p.posix);
           nestedGlob = Glob('**/$basePattern', context: p.posix);
+        } else {
+          // `**/name` requires at least one leading segment in package:glob,
+          // so directory-only patterns need an explicit root-level matcher.
+          rootDirGlob = Glob(basePattern, context: p.posix);
         }
         dirGlob = Glob('**/$basePattern/**', context: p.posix);
         pruneGlob = Glob('**/$basePattern', context: p.posix);
@@ -117,11 +129,12 @@ class _IgnoreRule {
       debugPrint('Failed to parse ignore pattern "$pattern": $e');
     }
 
-    return _IgnoreRule._(rootGlob, nestedGlob, dirGlob, pruneGlob);
+    return _IgnoreRule._(rootGlob, rootDirGlob, nestedGlob, dirGlob, pruneGlob);
   }
 
   const _IgnoreRule._(
     this.rootGlob,
+    this.rootDirGlob,
     this.nestedGlob,
     this.dirGlob,
     this.pruneGlob,
@@ -130,6 +143,7 @@ class _IgnoreRule {
   final Glob? dirGlob;
   final Glob? nestedGlob;
   final Glob? pruneGlob;
+  final Glob? rootDirGlob;
   final Glob? rootGlob;
 
   /// Verifies matches against normalized relative path targets.
@@ -143,6 +157,7 @@ class _IgnoreRule {
   /// Verifies matches specifically mapping to folder objects.
   bool matchesDir(String path) {
     if (pruneGlob != null && pruneGlob!.matches(path)) return true;
+    if (rootDirGlob != null && rootDirGlob!.matches(path)) return true;
     if (rootGlob != null && rootGlob!.matches(path)) return true;
     if (nestedGlob != null && nestedGlob!.matches(path)) return true;
     return false;
@@ -545,8 +560,12 @@ class FsService {
                     String name = frontmatter['name'] ?? '';
                     if (name.isEmpty) {
                       final parentDirName = p.basename(entity.parent.path);
+                      final parentPathNorm = _normalizeDriveLetter(
+                        entity.parent.path,
+                      );
                       if ((lowerName == 'skill.md' ||
                               lowerName == 'skills.md') &&
+                          parentPathNorm != canonicalRoot &&
                           parentDirName.isNotEmpty &&
                           parentDirName != 'skills' &&
                           parentDirName != '.agents' &&

@@ -9,6 +9,17 @@ import '../models/project_config.dart';
 
 // Service managing configuration storage serialization logic on physical disks
 class ConfigService {
+  /// Creates a configuration service.
+  ///
+  /// [supportDirectoryProvider] can be supplied by tests to redirect all
+  /// persistence into an isolated temporary directory. Production callers use
+  /// the platform application support directory.
+  ConfigService({Future<Directory> Function()? supportDirectoryProvider})
+    : _supportDirectoryProvider =
+          supportDirectoryProvider ?? getApplicationSupportDirectory;
+
+  final Future<Directory> Function() _supportDirectoryProvider;
+
   // Scans configs folder pathways and decodes project profile records
   Future<List<ProjectConfig>> loadConfigs() async {
     try {
@@ -184,7 +195,7 @@ class ConfigService {
 
   // Retrieves application specific data documents directories
   Future<Directory> _getConfigDir() async {
-    final supportDir = await getApplicationSupportDirectory();
+    final supportDir = await _supportDirectoryProvider();
     final configDir = Directory(p.join(supportDir.path, 'configs'));
     if (!await configDir.exists()) {
       await configDir.create(recursive: true);

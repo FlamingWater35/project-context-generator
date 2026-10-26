@@ -50,23 +50,31 @@ class BottomBar extends ConsumerWidget {
           skipLoadingOnReload: true,
           data: (PromptBuildResult? result) {
             if (result == null || result.fileCount == 0) {
-              return Row(
+              // Wrap keeps the empty-state text readable on narrow windows.
+              return Wrap(
                 key: const ValueKey('bottom_bar_empty'),
+                crossAxisAlignment: WrapCrossAlignment.center,
+                spacing: 12,
+                runSpacing: 2,
                 children: [
-                  Icon(
-                    Icons.info_outline,
-                    size: 14,
-                    color: colorScheme.onSurfaceVariant,
+                  Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(
+                        Icons.info_outline,
+                        size: 14,
+                        color: colorScheme.onSurfaceVariant,
+                      ),
+                      const SizedBox(width: 6),
+                      Text(
+                        'No files selected',
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          color: colorScheme.onSurfaceVariant,
+                          fontSize: 12,
+                        ),
+                      ),
+                    ],
                   ),
-                  const SizedBox(width: 6),
-                  Text(
-                    'No files selected',
-                    style: theme.textTheme.bodySmall?.copyWith(
-                      color: colorScheme.onSurfaceVariant,
-                      fontSize: 12,
-                    ),
-                  ),
-                  const Spacer(),
                   Text(
                     '0 files | 0 lines | 0 B | ~0 tokens',
                     style: theme.textTheme.bodySmall?.copyWith(
@@ -83,37 +91,35 @@ class BottomBar extends ConsumerWidget {
             final sizeStr = _formatFileSize(charCount);
             final lineStr = '${result.totalLines} lines';
 
-            return Row(
+            return Wrap(
               key: ValueKey(
                 'bottom_bar_stats_${result.fileCount}_${result.skillCount}_${result.totalLines}_$charCount',
               ),
+              crossAxisAlignment: WrapCrossAlignment.center,
+              spacing: 16,
+              runSpacing: 2,
               children: [
                 _StatItem(
                   icon: Icons.insert_drive_file_outlined,
                   label: '${result.fileCount} files selected',
                   color: Colors.teal.shade300,
                 ),
-                const SizedBox(width: 16),
-                if (result.skillCount > 0) ...[
+                if (result.skillCount > 0)
                   _StatItem(
                     icon: Icons.psychology_outlined,
                     label: '${result.skillCount} skills',
                     color: Colors.purple.shade300,
                   ),
-                  const SizedBox(width: 16),
-                ],
                 _StatItem(
                   icon: Icons.notes,
                   label: lineStr,
                   color: Colors.blue.shade300,
                 ),
-                const SizedBox(width: 16),
                 _StatItem(
                   icon: Icons.data_usage,
                   label: sizeStr,
                   color: Colors.grey.shade300,
                 ),
-                const Spacer(),
                 _StatItem(
                   icon: Icons.auto_awesome,
                   label: tokenStr,

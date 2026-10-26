@@ -65,9 +65,14 @@ class AgentSkill {
         references: parsedRefs,
       );
     } catch (_) {
+      // Defensive fallback: raw values may themselves have failed type checks.
+      final Object? rawId = json['id'];
+      final Object? rawName = json['name'];
       return AgentSkill(
-        id: json['id'] as String? ?? 'corrupted_skill',
-        name: json['name'] as String? ?? 'Unreadable Skill',
+        id: rawId is String && rawId.isNotEmpty ? rawId : 'corrupted_skill',
+        name: rawName is String && rawName.isNotEmpty
+            ? rawName
+            : 'Unreadable Skill',
         description: '',
         content: '',
       );

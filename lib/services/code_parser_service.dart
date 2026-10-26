@@ -153,7 +153,7 @@ class CodeParserService {
 
     // 1. First try backticked or quoted path strings (allows spaces inside quotes)
     final quotedRegex = RegExp(
-      r'''[`"']([-a-zA-Z0-9_./+\s]+?\.[a-zA-Z0-9]+|[-a-zA-Z0-9_./+\s]+)[`"']''',
+      r'''[`"']([-a-zA-Z0-9_./+\\\s]+?\.[a-zA-Z0-9]+|[-a-zA-Z0-9_./+\\\s]+)[`"']''',
       caseSensitive: false,
     );
     final quotedMatches = quotedRegex.allMatches(text).toList();
@@ -164,11 +164,19 @@ class CodeParserService {
 
     // 2. Fall back to unquoted path candidates (disallows unescaped spaces to prevent capturing sentence prefixes)
     final unquotedRegex = RegExp(
-      r'(?:###|##|#|\*\*|---)?\s*(?:File:\s*)?([-a-zA-Z0-9_./+]+\.[a-zA-Z0-9]+|[-a-zA-Z0-9_./+]+)',
+      r'(?:###|##|#|\*\*|---)?\s*(?:File:\s*)?([-a-zA-Z0-9_./+\\]+\.[a-zA-Z0-9]+|[-a-zA-Z0-9_./+\\]+)',
       caseSensitive: false,
     );
     final unquotedMatches = unquotedRegex.allMatches(text).toList();
     for (final m in unquotedMatches.reversed) {
+      // Never treat the tail of a URL or package import as a project path
+      // (e.g. "example.com/remote.dart" inside "https://example.com/...").
+      if (m.start > 0) {
+        final previous = text[m.start - 1];
+        if (previous == '/' || previous == ':' || previous == '.') {
+          continue;
+        }
+      }
       final cleaned = _cleanPathString(m.group(1) ?? '', rootPath);
       if (cleaned != null) return cleaned;
     }
@@ -193,6 +201,7 @@ class CodeParserService {
     // Ignore URLs or package / system imports
     if (cleaned.startsWith('http://') ||
         cleaned.startsWith('https://') ||
+        cleaned.contains('://') ||
         cleaned.startsWith('package:') ||
         cleaned.startsWith('dart:')) {
       return null;

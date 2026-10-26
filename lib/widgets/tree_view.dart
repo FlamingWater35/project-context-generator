@@ -120,7 +120,13 @@ class _ProjectTreeViewState extends ConsumerState<ProjectTreeView> {
                       ).colorScheme.primary.withAlpha(100),
                     ),
                   ),
-                  child: Row(
+                  // Wrap instead of Row so the batch actions stay usable on
+                  // narrow windows instead of overflowing horizontally.
+                  child: Wrap(
+                    alignment: WrapAlignment.spaceBetween,
+                    crossAxisAlignment: WrapCrossAlignment.center,
+                    spacing: 8,
+                    runSpacing: 4,
                     children: [
                       Text(
                         '${selectedPaths.length} items highlighted',
@@ -129,7 +135,6 @@ class _ProjectTreeViewState extends ConsumerState<ProjectTreeView> {
                           fontSize: 13,
                         ),
                       ),
-                      const Spacer(),
                       OutlinedButton.icon(
                         icon: const Icon(Icons.check_box, size: 16),
                         label: const Text('Check Selected'),
@@ -137,7 +142,6 @@ class _ProjectTreeViewState extends ConsumerState<ProjectTreeView> {
                           controller.checkFiles(selectedPaths);
                         },
                       ),
-                      const SizedBox(width: 8),
                       OutlinedButton.icon(
                         icon: const Icon(
                           Icons.check_box_outline_blank,
@@ -148,7 +152,6 @@ class _ProjectTreeViewState extends ConsumerState<ProjectTreeView> {
                           controller.uncheckFiles(selectedPaths);
                         },
                       ),
-                      const SizedBox(width: 8),
                       OutlinedButton.icon(
                         icon: const Icon(Icons.visibility_off, size: 16),
                         label: const Text('Ignore Selected'),
@@ -156,7 +159,6 @@ class _ProjectTreeViewState extends ConsumerState<ProjectTreeView> {
                           controller.addIgnorePatterns(selectedPaths.toList());
                         },
                       ),
-                      const SizedBox(width: 8),
                       IconButton(
                         icon: const Icon(Icons.close, size: 18),
                         tooltip: 'Clear Selection',
